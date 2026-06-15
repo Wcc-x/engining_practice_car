@@ -6,10 +6,10 @@
  * 小程序作为 GATT Client 连接后，通过 NUS RX Characteristic 写入数据包，
  * ESP32 解析数据包并提取控制指令（摇杆/滑杆/按键）。
  *
- * 数据包格式（江协科技小程序规定）:
- *   [joystick,lx,ly,rx,ry]  或 [j,lx,ly,rx,ry]      摇杆
- *   [slider,name,value]      或 [s,name,value]        滑杆
- *   [key,name,down/up]       或 [k,name,d/u]          按键
+ * 数据包格式:
+ *   [joystick,vx,vy,servo1,servo2]  或 [j,vx,vy,servo1,servo2]  摇杆+舵机
+ *   [slider,name,value]             或 [s,name,value]            滑杆
+ *   [key,name,down/up]              或 [k,name,d/u]              按键
  *
  * NUS UUID (Nordic UART Service 标准):
  *   Service:      6E400001-B5A3-F393-E0A9-E50E24DCCA9E
@@ -529,17 +529,17 @@ static void ax_ble_parse_packet(const char *str, uint8_t len)
 
     const char *cmd = tokens[0];
 
-    /* ---- 摇杆: [joystick,lx,ly,rx,ry] / [j,lx,ly,rx,ry] ---- */
+    /* ---- 摇杆+舵机: [joystick,vx,vy,servo1,servo2] / [j,vx,vy,servo1,servo2] ---- */
     if (streq_nocase(cmd, "joystick") || streq_nocase(cmd, "j")) {
         if (n >= 5) {
-            ax_ble_joystick.left_x  = (int16_t)atoi(tokens[1]);
-            ax_ble_joystick.left_y  = (int16_t)atoi(tokens[2]);
-            ax_ble_joystick.right_x = (int16_t)atoi(tokens[3]);
-            ax_ble_joystick.right_y = (int16_t)atoi(tokens[4]);
-            ax_ble_joystick.valid   = true;
-            ESP_LOGI(TAG, "Joystick: LX=%d LY=%d RX=%d RY=%d",
-                     ax_ble_joystick.left_x, ax_ble_joystick.left_y,
-                     ax_ble_joystick.right_x, ax_ble_joystick.right_y);
+            ax_ble_joystick.vx           = (int16_t)atoi(tokens[1]);
+            ax_ble_joystick.vy           = (int16_t)atoi(tokens[2]);
+            ax_ble_joystick.servo1_angle = (int16_t)atoi(tokens[3]);
+            ax_ble_joystick.servo2_angle = (int16_t)atoi(tokens[4]);
+            ax_ble_joystick.valid        = true;
+            ESP_LOGI(TAG, "Joystick: Vx=%d Vy=%d S1=%d S2=%d",
+                     ax_ble_joystick.vx, ax_ble_joystick.vy,
+                     ax_ble_joystick.servo1_angle, ax_ble_joystick.servo2_angle);
         }
         return;
     }

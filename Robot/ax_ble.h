@@ -6,10 +6,10 @@
  * 小程序作为 GATT Client 连接后，通过 NUS RX Characteristic 写入数据包，
  * ESP32 解析数据包并提取控制指令（摇杆/滑杆/按键）。
  *
- * 数据包格式（江协科技小程序规定）:
- *   [joystick,lx,ly,rx,ry]  或 [j,lx,ly,rx,ry]      摇杆
- *   [slider,name,value]      或 [s,name,value]        滑杆
- *   [key,name,down/up]       或 [k,name,d/u]          按键
+ * 数据包格式:
+ *   [joystick,vx,vy,servo1,servo2]  或 [j,vx,vy,servo1,servo2]  摇杆+舵机
+ *   [slider,name,value]             或 [s,name,value]            滑杆
+ *   [key,name,down/up]              或 [k,name,d/u]              按键
  *   [display,x,y,text,size]  或 [d,x,y,text,size]     显示屏 (暂不处理)
  *   [plot,val1,val2,...]     或 [p,val1,val2,...]     绘图   (暂不处理)
  *
@@ -33,13 +33,20 @@ extern "C" {
  *  解析结果结构体
  * ============================================================ */
 
-/** 摇杆数据 */
+/** 摇杆 + 舵机控制数据
+ *
+ *  数据包格式: [joystick, Vx, Vy, servo1_angle, servo2_angle]
+ *     Vx           — 前进/后退 摇杆值 (映射到机器人 Vx 速度)
+ *     Vy           — 左移/右移 摇杆值 (映射到机器人 Vy 速度)
+ *     servo1_angle — 舵机1 角度
+ *     servo2_angle — 舵机2 角度
+ */
 typedef struct {
     bool    valid;          /* 是否收到有效数据 */
-    int16_t left_x;         /* 左摇杆横向值 */
-    int16_t left_y;         /* 左摇杆纵向值 */
-    int16_t right_x;        /* 右摇杆横向值 */
-    int16_t right_y;        /* 右摇杆纵向值 */
+    int16_t vx;             /* Vx 摇杆值 (前进/后退) */
+    int16_t vy;             /* Vy 摇杆值 (左移/右移) */
+    int16_t servo1_angle;   /* 舵机1 角度 */
+    int16_t servo2_angle;   /* 舵机2 角度 */
 } AX_BLE_Joystick;
 
 /** 滑杆数据 */
