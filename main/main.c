@@ -124,7 +124,7 @@ void app_main(void)
                pcnt_encoder_get_angle_deg(encoder_4));
 
         // ---------- 更新PWM占空比 ----------
-        ledc_pwm_set_duty(ledc_config, ledpwmval);
+        // ledc_pwm_set_duty(ledc_config, ledpwmval);
 
        
 
@@ -141,4 +141,5 @@ void app_main(void)
     free(ledc_config_2);
     free(ledc_config_3);
     free(ledc_config_4);
+}
 }
