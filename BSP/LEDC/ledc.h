@@ -11,7 +11,7 @@
 #define LEDC_PWM_CHANNEL_2  LEDC_CHANNEL_2
 #define LEDC_PWM_CHO_GPIO_2  GPIO_NUM_2
 
-#define LEDC_PWM_TIMER LEDC_TIMER_1
+#define LEDC_PWM_TIMER_1 LEDC_TIMER_1
 #define LEDC_PWM_CHANNEL_3  LEDC_CHANNEL_10
 #define LEDC_PWM_CHO_GPIO_3  GPIO_NUM_10
 
@@ -28,7 +28,7 @@ typedef struct{
     ledc_timer_bit_t duty_resolution;
     ledc_channel_t channel;
     uint32_t duty;
-    int gpio_num
+    int gpio_num;
 }ledc_config_t;
 uint32_t ledc_duty_pow(uint32_t duty,uint32_t m,uint32_t n);
 void ledc_Init(ledc_config_t *ledc_config);
