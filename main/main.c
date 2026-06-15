@@ -92,9 +92,9 @@ void app_main(void)
             map_joystick_to_speed(&ax_ble_joystick, &vx, &vy);
             AX_ROBOT_SetSpeed(vx, vy, 0);
 
-            /* 舵机控制 */
-            AX_SERVO_S1_SetAngle(ax_ble_joystick.servo1_angle);
-            AX_SERVO_S2_SetAngle(ax_ble_joystick.servo2_angle);
+            /* 舵机控制 (蓝牙发的是度数，HAL需要十分之一度) */
+            AX_SERVO_S1_SetAngle(ax_ble_joystick.servo1_angle * 10);
+            AX_SERVO_S2_SetAngle(ax_ble_joystick.servo2_angle * 10);
 
             last_ble_data_time = t0;
         }
