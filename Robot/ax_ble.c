@@ -2,63 +2,106 @@
  * @file    ax_ble.c
  * @brief   BLE 蓝牙接收 — NimBLE GATT Server (NUS) + 江协科技数据包解析
  *
- * 架构:
- *   NimBLE Host (GATT Server)
- *     └── Nordic UART Service (NUS)
- *           ├── RX Characteristic (Write, phone→ESP)  ← 小程序写入数据包
- *           └── TX Characteristic (Notify, ESP→phone)  → 调试回传
+ * 基于 ESP-IDF v6.0.1 NimBLE 实现 Nordic UART Service (NUS) 外设角色。
+ * 小程序作为 GATT Client 连接后，通过 NUS RX Characteristic 写入数据包，
+ * ESP32 解析数据包并提取控制指令（摇杆/滑杆/按键）。
  *
- * 数据流:
- *   小程序发送 "[joystick,100,200,-50,0]\r\n"
- *     → NUS RX Write callback
- *       → 字节累积到环形缓冲区
- *         → 检测完整数据包 ([...]+换行)
- *           → 解析逗号分隔字段
- *             → 更新 ax_ble_joystick / ax_ble_slider / ax_ble_key
- *               → main 循环中读取并控制小车
+ * 数据包格式（江协科技小程序规定）:
+ *   [joystick,lx,ly,rx,ry]  或 [j,lx,ly,rx,ry]      摇杆
+ *   [slider,name,value]      或 [s,name,value]        滑杆
+ *   [key,name,down/up]       或 [k,name,d/u]          按键
+ *
+ * NUS UUID (Nordic UART Service 标准):
+ *   Service UUID:      6E400001-B5A3-F393-E0A9-E50E24DCCA9E
+ *   RX (phone→ESP):     6E400002-B5A3-F393-E0A9-E50E24DCCA9E  (Write)
+ *   TX (ESP→phone):     6E400003-B5A3-F393-E0A9-E50E24DCCA9E  (Notify)
  */
 
 #include "ax_ble.h"
+
+#include <assert.h>
+#include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "sdkconfig.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 /* NimBLE */
 #include "host/ble_hs.h"
+#include "host/ble_uuid.h"
 #include "host/util/util.h"
-#include "host/ble_gap.h"
-#include "host/ble_gatt.h"
+#include "nimble/ble.h"
+#include "nimble/nimble_port.h"
+#include "nimble/nimble_port_freertos.h"
+#include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
 static const char *TAG = "AX_BLE";
 
 /* ============================================================
- *  NUS UUID (Nordic UART Service — 标准)
+ *  设备名称
  * ============================================================ */
-#define NUS_SERVICE_UUID        0x6E400001B5A3F393E0A9E50E24DCCA9E
-#define NUS_RX_CHAR_UUID        0x6E400002B5A3F393E0A9E50E24DCCA9E  /* phone→ESP, Write */
-#define NUS_TX_CHAR_UUID        0x6E400003B5A3F393E0A9E50E24DCCA9E  /* ESP→phone, Notify */
-
-/* NimBLE 属性句柄 */
-static uint16_t nus_rx_handle;
-static uint16_t nus_tx_handle;
-static uint16_t nus_cccd_handle;
-
-/* 连接句柄 (0xFFFF = 未连接) */
-static uint16_t conn_handle = BLE_HS_CONN_HANDLE_NONE;
+#define DEVICE_NAME  "XTARK-ESP32"
 
 /* ============================================================
- *  全局数据
+ *  NUS UUID 128-bit (Nordic UART Service)
+ *
+ *  NimBLE 使用小端序存储 128-bit UUID:
+ *  BLE_UUID128_INIT( byte[0], byte[1], ..., byte[15] )
+ *  其中 byte[0] 是最低有效字节
+ *
+ *  标准格式: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E
+ *  MSB→LSB:  6E 40 00 01 B5 A3 F3 93 E0 A9 E5 0E 24 DC CA 9E
+ *  LSB→MSB:  9E CA DC 24 0E E5 A9 E0 93 F3 A3 B5 01 00 40 6E
+ * ============================================================ */
+
+/* NUS Service UUID */
+static const ble_uuid128_t nus_svc_uuid = BLE_UUID128_INIT(
+    0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0,
+    0x93, 0xF3, 0xA3, 0xB5, 0x01, 0x00, 0x40, 0x6E
+);
+
+/* RX Characteristic UUID (phone→ESP, Write) */
+static const ble_uuid128_t nus_rx_uuid = BLE_UUID128_INIT(
+    0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0,
+    0x93, 0xF3, 0xA3, 0xB5, 0x02, 0x00, 0x40, 0x6E
+);
+
+/* TX Characteristic UUID (ESP→phone, Notify) */
+static const ble_uuid128_t nus_tx_uuid = BLE_UUID128_INIT(
+    0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0,
+    0x93, 0xF3, 0xA3, 0xB5, 0x03, 0x00, 0x40, 0x6E
+);
+
+/* CCCD UUID (16-bit standard) */
+static const ble_uuid16_t cccd_uuid = BLE_UUID16_INIT(BLE_GATT_DSC_CLT_CFG_UUID16);
+
+/* ============================================================
+ *  NimBLE GATT 句柄
+ * ============================================================ */
+static uint16_t nus_rx_val_handle;
+static uint16_t nus_tx_val_handle;
+static uint16_t nus_tx_cccd_handle;
+
+/* 当前连接句柄 */
+static uint16_t conn_handle = BLE_HS_CONN_HANDLE_NONE;
+/* TX Notify 是否已启用 */
+static bool tx_notify_enabled = false;
+
+/* ============================================================
+ *  全局数据 (对外)
  * ============================================================ */
 AX_BLE_Joystick  ax_ble_joystick;
 AX_BLE_Slider    ax_ble_slider;
 AX_BLE_Key       ax_ble_key;
 bool             ax_ble_connected = false;
 
-/* 接收缓冲区 (用于调试查看原始数据) */
 #define RX_BUF_SIZE  512
 uint8_t  ax_ble_rx_buf[RX_BUF_SIZE];
 uint16_t ax_ble_rx_len = 0;
@@ -68,142 +111,141 @@ static char   pkt_buf[256];
 static uint8_t pkt_idx = 0;
 
 /* ============================================================
- *  内部函数声明
+ *  前向声明
  * ============================================================ */
-static int  nus_gap_event_cb(struct ble_gap_event *event, void *arg);
+static int  nus_gap_event_handler(struct ble_gap_event *event, void *arg);
 static int  nus_gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
                                 struct ble_gatt_access_ctxt *ctxt, void *arg);
-static void ax_ble_advertise(void);
+static void nus_start_advertising(void);
 static void ax_ble_parse_packet(const char *str, uint8_t len);
+static void nus_on_stack_sync(void);
+static void nus_on_stack_reset(int reason);
+void nus_gatt_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg);
 
 /* ============================================================
- *  GATT 服务定义 (NUS)
+ *  GATT 服务表 (NUS)
  * ============================================================ */
-
-/* NUS Service 定义 */
 static const struct ble_gatt_svc_def nus_gatt_svcs[] = {
     {
-        /* NUS Service */
+        /* NUS Primary Service */
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
-        .uuid = BLE_UUID128_DECLARE(NUS_SERVICE_UUID),
+        .uuid = &nus_svc_uuid.u,
         .characteristics = (struct ble_gatt_chr_def[]) {
             {
-                /* RX Characteristic — 手机写入数据到 ESP32 */
-                .uuid = BLE_UUID128_DECLARE(NUS_RX_CHAR_UUID),
+                /* RX Characteristic (phone→ESP, Write) */
+                .uuid = &nus_rx_uuid.u,
                 .access_cb = nus_gatt_access_cb,
                 .flags = BLE_GATT_CHR_F_WRITE,
-                .val_handle = &nus_rx_handle,
+                .val_handle = &nus_rx_val_handle,
             },
             {
-                /* TX Characteristic — ESP32 通知数据到手机 */
-                .uuid = BLE_UUID128_DECLARE(NUS_TX_CHAR_UUID),
+                /* TX Characteristic (ESP→phone, Notify) */
+                .uuid = &nus_tx_uuid.u,
                 .access_cb = nus_gatt_access_cb,
                 .flags = BLE_GATT_CHR_F_NOTIFY,
-                .val_handle = &nus_tx_handle,
+                .val_handle = &nus_tx_val_handle,
                 .descriptors = (struct ble_gatt_dsc_def[]) {
                     {
-                        .uuid = BLE_UUID16_DECLARE(BLE_GATT_DSC_CLT_CFG_UUID16),
+                        /* CCCD — 手机写入以启用 Notify */
+                        .uuid = &cccd_uuid.u,
                         .att_flags = BLE_ATT_F_READ | BLE_ATT_F_WRITE,
                         .access_cb = nus_gatt_access_cb,
-                        .handle = &nus_cccd_handle,
+                        .handle = &nus_tx_cccd_handle,
                     },
-                    { 0 } /* terminator */
+                    { 0 } /* descriptors terminator */
                 },
             },
-            { 0 } /* terminator */
+            { 0 } /* characteristics terminator */
         },
     },
-    { 0 } /* terminator */
+    { 0 } /* services terminator */
 };
 
 /* ============================================================
- *  GATT 访问回调 — 处理 Write / Read / Notify CCCD
+ *  GATT 注册回调
+ * ============================================================ */
+void nus_gatt_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
+{
+    (void)arg;
+    switch (ctxt->op) {
+    case BLE_GATT_REGISTER_OP_SVC:
+        ESP_LOGD(TAG, "registered NUS service handle=%d", ctxt->svc.handle);
+        break;
+    case BLE_GATT_REGISTER_OP_CHR:
+        ESP_LOGD(TAG, "registered characteristic def_handle=%d val_handle=%d",
+                 ctxt->chr.def_handle, ctxt->chr.val_handle);
+        break;
+    case BLE_GATT_REGISTER_OP_DSC:
+        ESP_LOGD(TAG, "registered descriptor handle=%d", ctxt->dsc.handle);
+        break;
+    default:
+        break;
+    }
+}
+
+/* ============================================================
+ *  GATT 访问回调 — 处理 Write (RX) & CCCD
  * ============================================================ */
 static int nus_gatt_access_cb(uint16_t c_handle, uint16_t attr_handle,
                                struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
-    if (attr_handle == nus_rx_handle) {
-        /* 手机→ESP32: 写入数据 */
-        if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
+    (void)arg;
+    (void)c_handle;
+
+    switch (ctxt->op) {
+
+    /* ---- RX: 手机写入数据到 ESP32 ---- */
+    case BLE_GATT_ACCESS_OP_WRITE_CHR:
+        if (attr_handle == nus_rx_val_handle) {
             uint16_t om_len = OS_MBUF_PKTLEN(ctxt->om);
             if (om_len > 0 && om_len < RX_BUF_SIZE) {
                 /* 拷贝到调试缓冲区 */
-                ax_ble_rx_len = om_len;
                 os_mbuf_copyd(ctxt->om, 0, om_len, ax_ble_rx_buf);
+                ax_ble_rx_len = om_len;
                 ax_ble_rx_buf[om_len] = '\0';
 
                 /* 逐字节累积到数据包缓冲区 */
                 for (uint16_t i = 0; i < om_len; i++) {
                     char ch = (char)ax_ble_rx_buf[i];
 
-                    /* 检测包头 '[' — 开始新数据包 */
                     if (ch == '[') {
+                        /* 包头 — 开始新数据包 */
                         pkt_idx = 0;
                         pkt_buf[pkt_idx++] = ch;
-                    }
-                    /* 包内数据 — 累积 */
-                    else if (pkt_idx > 0 && pkt_idx < sizeof(pkt_buf) - 1) {
+                    } else if (pkt_idx > 0 && pkt_idx < sizeof(pkt_buf) - 1) {
                         pkt_buf[pkt_idx++] = ch;
 
-                        /* 检测包尾 ']' — 完整数据包接收完成 */
+                        /* 包尾 — 完整数据包 */
                         if (ch == ']') {
                             pkt_buf[pkt_idx] = '\0';
-                            ax_ble_parse_packet(pkt_buf + 1, pkt_idx - 2);  /* 跳过[和] */
+                            ax_ble_parse_packet(pkt_buf + 1, pkt_idx - 2);
                             pkt_idx = 0;
                         }
                     }
-                    /* 未在包内的字节 — 忽略 */
+                }
+
+                /* 回传确认到手机 (调试用) */
+                if (tx_notify_enabled) {
+                    struct os_mbuf *om = ble_hs_mbuf_from_flat(
+                        ax_ble_rx_buf, om_len);
+                    if (om) {
+                        ble_gattc_notify_custom(conn_handle, nus_tx_val_handle, om);
+                    }
                 }
             }
             return 0;
         }
-    }
-
-    /* 允许 CCCD 读写 (TX Notify 使能) */
-    if (attr_handle == nus_cccd_handle) {
-        return 0;
-    }
-
-    return BLE_ATT_ERR_UNLIKELY;
-}
-
-/* ============================================================
- *  GAP 事件回调 — 连接/断开
- * ============================================================ */
-static int nus_gap_event_cb(struct ble_gap_event *event, void *arg)
-{
-    (void)arg;
-
-    switch (event->type) {
-    case BLE_GAP_EVENT_CONNECT:
-        /* 连接成功 */
-        if (event->connect.status == 0) {
-            ESP_LOGI(TAG, "Connected!");
-            conn_handle = event->connect.conn_handle;
-            ax_ble_connected = true;
-        } else {
-            /* 连接失败 — 重新开始广播 */
-            ax_ble_advertise();
-        }
         break;
 
-    case BLE_GAP_EVENT_DISCONNECT:
-        /* 断开连接 */
-        ESP_LOGI(TAG, "Disconnected, re-advertising...");
-        conn_handle = BLE_HS_CONN_HANDLE_NONE;
-        ax_ble_connected = false;
-        ax_ble_advertise();
-        break;
-
-    case BLE_GAP_EVENT_ADV_COMPLETE:
-        /* 广播超时 → 重新开始 */
-        ax_ble_advertise();
-        break;
-
-    case BLE_GAP_EVENT_SUBSCRIBE:
-        /* 手机订阅 Notify */
-        if (event->subscribe.attr_handle == nus_cccd_handle) {
-            ESP_LOGI(TAG, "Client subscribed to TX notify");
+    /* ---- CCCD: 手机订阅/取消 Notify ---- */
+    case BLE_GATT_ACCESS_OP_WRITE_DSC:
+        if (attr_handle == nus_tx_cccd_handle) {
+            if (ctxt->om->om_len >= 2) {
+                uint16_t val = (ctxt->om->om_data[1] << 8) | ctxt->om->om_data[0];
+                tx_notify_enabled = (val & 0x0001) != 0;
+                ESP_LOGI(TAG, "TX notify %s", tx_notify_enabled ? "ENABLED" : "DISABLED");
+            }
+            return 0;
         }
         break;
 
@@ -211,114 +253,220 @@ static int nus_gap_event_cb(struct ble_gap_event *event, void *arg)
         break;
     }
 
-    return 0;
+    return BLE_ATT_ERR_UNLIKELY;
 }
 
 /* ============================================================
- *  广播 — 可被发现和连接
+ *  GAP 事件处理
  * ============================================================ */
-static void ax_ble_advertise(void)
+static int nus_gap_event_handler(struct ble_gap_event *event, void *arg)
 {
-    struct ble_gap_adv_params adv_params = {0};
-    struct ble_hs_adv_fields   fields     = {0};
+    (void)arg;
+
+    switch (event->type) {
+
+    case BLE_GAP_EVENT_CONNECT:
+        if (event->connect.status == 0) {
+            ESP_LOGI(TAG, "BLE Connected!");
+            conn_handle = event->connect.conn_handle;
+            ax_ble_connected = true;
+        } else {
+            ESP_LOGI(TAG, "Connection failed, re-advertising...");
+            nus_start_advertising();
+        }
+        return 0;
+
+    case BLE_GAP_EVENT_DISCONNECT:
+        ESP_LOGI(TAG, "Disconnected (reason=%d), re-advertising...",
+                 event->disconnect.reason);
+        conn_handle = BLE_HS_CONN_HANDLE_NONE;
+        ax_ble_connected = false;
+        tx_notify_enabled = false;
+        pkt_idx = 0;
+        nus_start_advertising();
+        return 0;
+
+    case BLE_GAP_EVENT_ADV_COMPLETE:
+        ESP_LOGI(TAG, "Advertising complete, restarting...");
+        nus_start_advertising();
+        return 0;
+
+    case BLE_GAP_EVENT_SUBSCRIBE:
+        ESP_LOGI(TAG, "Subscribe event: conn=%d attr=%d notify=%d",
+                 event->subscribe.conn_handle, event->subscribe.attr_handle,
+                 event->subscribe.cur_notify);
+        return 0;
+
+    case BLE_GAP_EVENT_NOTIFY_TX:
+        if (event->notify_tx.status != 0 &&
+            event->notify_tx.status != BLE_HS_EDONE) {
+            ESP_LOGW(TAG, "Notify TX error: status=%d", event->notify_tx.status);
+        }
+        return 0;
+
+    case BLE_GAP_EVENT_MTU:
+        ESP_LOGI(TAG, "MTU update: mtu=%d", event->mtu.value);
+        return 0;
+
+    default:
+        return 0;
+    }
+}
+
+/* ============================================================
+ *  开始广播
+ * ============================================================ */
+static void nus_start_advertising(void)
+{
     int rc;
+    struct ble_hs_adv_fields adv_fields = {0};
+    struct ble_gap_adv_params adv_params = {0};
 
-    /* 广播数据: 设备名称 + 完整 UUID128 列表 */
-    fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.name = (uint8_t *)"XTARK-ESP32";
-    fields.name_len = strlen("XTARK-ESP32");
-    fields.name_is_complete = 1;
+    /* 广播数据 */
+    adv_fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+    adv_fields.name = (uint8_t *)DEVICE_NAME;
+    adv_fields.name_len = strlen(DEVICE_NAME);
+    adv_fields.name_is_complete = 1;
 
-    rc = ble_gap_adv_set_fields(&fields);
+    rc = ble_gap_adv_set_fields(&adv_fields);
     if (rc != 0) {
-        ESP_LOGE(TAG, "adv_set_fields failed: %d", rc);
+        ESP_LOGE(TAG, "failed to set adv fields: %d", rc);
         return;
     }
 
-    adv_params.conn_mode    = BLE_GAP_CONN_MODE_UND;
-    adv_params.disc_mode    = BLE_GAP_DISC_MODE_GEN;
-    adv_params.itvl_min     = BLE_GAP_ADV_ITVL_MS(30);
-    adv_params.itvl_max     = BLE_GAP_ADV_ITVL_MS(60);
+    /* 广播参数 */
+    adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
+    adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
+    adv_params.itvl_min  = BLE_GAP_ADV_ITVL_MS(30);
+    adv_params.itvl_max  = BLE_GAP_ADV_ITVL_MS(60);
 
     rc = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER,
-                           &adv_params, nus_gap_event_cb, NULL);
+                           &adv_params, nus_gap_event_handler, NULL);
     if (rc != 0) {
-        ESP_LOGE(TAG, "adv_start failed: %d", rc);
+        ESP_LOGE(TAG, "failed to start advertising: %d", rc);
+        return;
     }
+
+    ESP_LOGI(TAG, "Advertising started as '%s'", DEVICE_NAME);
 }
 
 /* ============================================================
- *  Host 任务回调 — NimBLE 栈就绪时调用
+ *  NimBLE 栈回调
  * ============================================================ */
-static void nus_on_sync(void)
+
+/* 栈就绪 — 注册 GATT 服务 + 开始广播 */
+static void nus_on_stack_sync(void)
 {
-    /* 注册 GATT 服务 */
-    int rc = ble_gatts_count_cfg(nus_gatt_svcs);
+    int rc;
+
+    /* 确保有蓝牙地址 */
+    rc = ble_hs_util_ensure_addr(0);
     if (rc != 0) {
-        ESP_LOGE(TAG, "count_cfg failed: %d", rc);
+        ESP_LOGE(TAG, "no BT address available");
+        return;
+    }
+
+    /* 注册 GATT 服务 */
+    rc = ble_gatts_count_cfg(nus_gatt_svcs);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "gatts_count_cfg failed: %d", rc);
         return;
     }
     rc = ble_gatts_add_svcs(nus_gatt_svcs);
     if (rc != 0) {
-        ESP_LOGE(TAG, "add_svcs failed: %d", rc);
+        ESP_LOGE(TAG, "gatts_add_svcs failed: %d", rc);
         return;
     }
 
     /* 开始广播 */
-    ax_ble_advertise();
-    ESP_LOGI(TAG, "BLE NUS Server started, advertising as 'XTARK-ESP32'");
+    nus_start_advertising();
+}
+
+/* 栈复位 */
+static void nus_on_stack_reset(int reason)
+{
+    ESP_LOGI(TAG, "NimBLE stack reset, reason=%d", reason);
 }
 
 /* ============================================================
- *  NimBLE Host 任务
+ *  配置并启动 NimBLE Host
  * ============================================================ */
-static void nus_host_task(void *param)
+static void nimble_host_config_init(void)
+{
+    /* 回调 */
+    ble_hs_cfg.reset_cb = nus_on_stack_reset;
+    ble_hs_cfg.sync_cb  = nus_on_stack_sync;
+    ble_hs_cfg.gatts_register_cb = nus_gatt_register_cb;
+
+    /* 存储配置 (bonding 等需要) */
+    ble_store_config_init();
+}
+
+static void nimble_host_task(void *param)
 {
     (void)param;
     ESP_LOGI(TAG, "NimBLE host task started");
-    /* 此函数不会返回 — 内部运行 NimBLE 事件循环 */
     nimble_port_run();
-    /* unreachable */
     vTaskDelete(NULL);
 }
 
 /* ============================================================
- *  公共 API: 初始化 BLE
+ *  公共 API
  * ============================================================ */
+
 void AX_BLE_Init(const char *device_name)
 {
-    (void)device_name;  /* 如需动态名称，可存入全局变量在 advertise 中使用 */
+    (void)device_name;  /* 当前固定使用 DEVICE_NAME */
 
-    /* 初始化 NVS (NimBLE 需要) */
+    /* NVS 初始化 */
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        nvs_flash_erase();
-        nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
+        ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_flash_init failed: %d", ret);
+        return;
     }
 
-    /* 初始化 NimBLE */
-    nimble_port_init();
+    /* NimBLE 栈初始化 */
+    ret = nimble_port_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "nimble_port_init failed: %d", ret);
+        return;
+    }
 
-    /* 设置同步回调 (栈就绪后注册 GATT, 开始广播) */
-    ble_hs_cfg.sync_cb = nus_on_sync;
+    /* GAP 服务 */
+    ble_svc_gap_init();
+    ble_svc_gap_device_name_set(DEVICE_NAME);
 
-    /* 启动 NimBLE Host 任务 (固定到 CPU 核 0, 优先级 5) */
-    xTaskCreatePinnedToCore(nus_host_task, "nimble_host",
-                            4096, NULL, 5, NULL, 0);
+    /* GATT 服务 */
+    ble_svc_gatt_init();
 
-    /* 初始化全局数据 */
+    /* Host 配置 */
+    nimble_host_config_init();
+
+    /* 启动 NimBLE Host 任务 */
+    BaseType_t rc = xTaskCreate(nimble_host_task, "nimble_host",
+                                4 * 1024, NULL, 5, NULL);
+    if (rc != pdPASS) {
+        ESP_LOGE(TAG, "failed to create NimBLE host task");
+        return;
+    }
+
+    /* 清零全局数据 */
     memset(&ax_ble_joystick, 0, sizeof(ax_ble_joystick));
     memset(&ax_ble_slider,   0, sizeof(ax_ble_slider));
     memset(&ax_ble_key,      0, sizeof(ax_ble_key));
     pkt_idx = 0;
+
+    ESP_LOGI(TAG, "BLE NUS initialized successfully");
 }
 
-/* ============================================================
- *  公共 API: 发送数据到手机 (Notify)
- * ============================================================ */
 int AX_BLE_Send(const uint8_t *data, uint16_t len)
 {
-    if (conn_handle == BLE_HS_CONN_HANDLE_NONE) {
+    if (conn_handle == BLE_HS_CONN_HANDLE_NONE || !tx_notify_enabled) {
         return -1;
     }
 
@@ -327,32 +475,22 @@ int AX_BLE_Send(const uint8_t *data, uint16_t len)
         return -2;
     }
 
-    int rc = ble_gattc_notify_custom(conn_handle, nus_tx_handle, om);
+    int rc = ble_gattc_notify_custom(conn_handle, nus_tx_val_handle, om);
     return rc;
 }
 
 /* ============================================================
- *  数据包解析器 — 解析江协科技小程序数据包
+ *  数据包解析器
  * ============================================================
  *
  *  输入: "joystick,100,200,-50,0"  (已去掉 [ 和 ])
  *        或 "j,100,200,-50,0"       (短格式)
- *
- *  命令标识:
- *    joystick / j  → 摇杆控制
- *    slider   / s  → 滑杆控制
- *    key      / k  → 按键控制
- *    display  / d  → 显示屏  (暂忽略)
- *    plot     / p  → 绘图    (暂忽略)
- *    display-clear / d-c → 清屏 (暂忽略)
- *    plot-clear     / p-c → 清绘图 (暂忽略)
  */
 
-/* 最大字段数 */
 #define MAX_TOKENS  10
 
-/* 从逗号分隔字符串中提取字段 */
-static uint8_t tokenize(const char *str, uint8_t len, const char *tokens[], uint8_t max_tok)
+static uint8_t tokenize(const char *str, uint8_t len,
+                         const char *tokens[], uint8_t max_tok)
 {
     uint8_t count = 0;
     uint8_t start = 0;
@@ -360,14 +498,12 @@ static uint8_t tokenize(const char *str, uint8_t len, const char *tokens[], uint
     for (uint8_t i = 0; i <= len && count < max_tok; i++) {
         if (i == len || str[i] == ',') {
             if (i > start) {
-                /* 跳过前导空格 */
+                /* 去掉前后空白 */
                 while (start < i && str[start] == ' ') start++;
-                /* 跳过后缀空格 */
                 uint8_t end = i;
                 while (end > start && str[end - 1] == ' ') end--;
 
                 if (end > start) {
-                    /* 使用静态缓冲区存放字段副本 */
                     static char tok_buf[MAX_TOKENS][32];
                     uint8_t copy_len = (end - start) < 31 ? (end - start) : 31;
                     memcpy(tok_buf[count], str + start, copy_len);
@@ -382,7 +518,7 @@ static uint8_t tokenize(const char *str, uint8_t len, const char *tokens[], uint
     return count;
 }
 
-/* 判断字符串相等 (不区分大小写) */
+/* 不区分大小写的字符串比较 */
 static bool streq_nocase(const char *a, const char *b)
 {
     while (*a && *b) {
@@ -403,14 +539,14 @@ static void ax_ble_parse_packet(const char *str, uint8_t len)
     while (len > 0 && *str == ' ') { str++; len--; }
     if (len == 0) return;
 
-    /* 分割字段 */
+    /* 按逗号分割 */
     const char *tokens[MAX_TOKENS];
     uint8_t n = tokenize(str, len, tokens, MAX_TOKENS);
     if (n == 0) return;
 
     const char *cmd = tokens[0];
 
-    /* ---- 摇杆: [joystick,lx,ly,rx,ry] 或 [j,lx,ly,rx,ry] ---- */
+    /* ---- 摇杆 ---- */
     if (streq_nocase(cmd, "joystick") || streq_nocase(cmd, "j")) {
         if (n >= 5) {
             ax_ble_joystick.left_x  = (int16_t)atoi(tokens[1]);
@@ -425,7 +561,7 @@ static void ax_ble_parse_packet(const char *str, uint8_t len)
         return;
     }
 
-    /* ---- 滑杆: [slider,name,value] 或 [s,name,value] ---- */
+    /* ---- 滑杆 ---- */
     if (streq_nocase(cmd, "slider") || streq_nocase(cmd, "s")) {
         if (n >= 3) {
             ax_ble_slider.name  = (int16_t)atoi(tokens[1]);
@@ -437,16 +573,12 @@ static void ax_ble_parse_packet(const char *str, uint8_t len)
         return;
     }
 
-    /* ---- 按键: [key,name,down/up] 或 [k,name,d/u] ---- */
+    /* ---- 按键 ---- */
     if (streq_nocase(cmd, "key") || streq_nocase(cmd, "k")) {
         if (n >= 3) {
             ax_ble_key.name = (int16_t)atoi(tokens[1]);
-            /* "down"/"d" = 按下, "up"/"u" = 松开 */
-            if (streq_nocase(tokens[2], "down") || streq_nocase(tokens[2], "d")) {
-                ax_ble_key.is_down = true;
-            } else {
-                ax_ble_key.is_down = false;
-            }
+            ax_ble_key.is_down = streq_nocase(tokens[2], "down") ||
+                                 streq_nocase(tokens[2], "d");
             ax_ble_key.valid = true;
             ESP_LOGI(TAG, "Key: name=%d %s",
                      ax_ble_key.name,
@@ -455,6 +587,6 @@ static void ax_ble_parse_packet(const char *str, uint8_t len)
         return;
     }
 
-    /* ---- display / plot — 暂不处理 ---- */
-    ESP_LOGD(TAG, "Unhandled packet: [%.*s]", len, str);
+    /* display / plot — 暂忽略 */
+    ESP_LOGD(TAG, "Unhandled: [%.*s]", len, str);
 }
