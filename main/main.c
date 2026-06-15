@@ -86,7 +86,7 @@ void app_main(void)
     while (1) {
         int64_t t0 = esp_timer_get_time();
 
-        /* ---- 检查 BLE 数据 ---- */
+        /*  检查 BLE 数据 */
         if (ax_ble_joystick.valid) {
             ax_ble_joystick.valid = false;  /* 消费数据 */
 
