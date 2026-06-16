@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS "ax_hal.c"
-         "ax_robot.c"
+        
          "ax_kinematics.c"
          "ax_speed.c"
          "ax_ble.c"

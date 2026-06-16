@@ -24,7 +24,6 @@
   */
 
 #include "ax_kinematics.h"
-#include "ax_robot.h"
 #include "ax_speed.h"
 
 /*   
@@ -241,11 +240,11 @@ void AX_ROBOT_Kinematics(void)
      *    pwm += Kp × bias + Kd × (bias - bias_last)
      *    pwm 钳位 ±4200
      *    */
-    R_Wheel_A.PWM = AX_SPEED_PidCtlA(R_Wheel_A.TG, (float)R_Wheel_A.RT);
-    R_Wheel_B.PWM = AX_SPEED_PidCtlB(R_Wheel_B.TG, (float)R_Wheel_B.RT);
-    R_Wheel_C.PWM = AX_SPEED_PidCtlC(R_Wheel_C.TG, (float)R_Wheel_C.RT);
-    R_Wheel_D.PWM = AX_SPEED_PidCtlD(R_Wheel_D.TG, (float)R_Wheel_D.RT);
-
+    
+    R_Wheel_A.PWM = PID_Handle(&A_PID,R_Wheel_A.TG, (float)R_Wheel_A.RT);
+    R_Wheel_B.PWM = PID_Handle(&B_PID,R_Wheel_B.TG, (float)R_Wheel_B.RT);
+    R_Wheel_C.PWM = PID_Handle(&C_PID,R_Wheel_C.TG, (float)R_Wheel_C.RT);
+    R_Wheel_D.PWM = PID_Handle(&D_PID,R_Wheel_D.TG, (float)R_Wheel_D.RT);
     /*   
      *  Step 6 — PWM 输出接口: 驱动 ESP32 LEDC 硬件
      *

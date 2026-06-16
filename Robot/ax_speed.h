@@ -1,26 +1,14 @@
 /**			                                                    
-		   ____                    _____ _______ _____       XTARK@塔克创新
-		  / __ \                  / ____|__   __|  __ \ 
-		 | |  | |_ __   ___ _ __ | |       | |  | |__) |
-		 | |  | | '_ \ / _ \ '_ \| |       | |  |  _  / 
-		 | |__| | |_) |  __/ | | | |____   | |  | | \ \ 
-		  \____/| .__/ \___|_| |_|\_____|  |_|  |_|  \_\
-				| |                                     
-				|_|                OpenCTR   机器人控制器
-									 
-  ****************************************************************************** 
-  *           
-  * 版权所有： XTARK@塔克创新  版权所有，盗版必究
-  * 公司网站： www.xtark.cn   www.tarkbot.com
-  * 淘宝店铺： https://xtark.taobao.com  
-  * 塔克微信： 塔克创新（关注公众号，获取最新更新资讯）
-  *      
-  ******************************************************************************
-  * @作  者  塔克创新团队
-  * @内  容  机器人轮子PID速度控制
-  *
-  ******************************************************************************
-  */
+	         ________
+      .-'        '-.
+    .'              '.
+   /   .--.    .--.   \
+  :   |    |  |    |   :
+  |   | '--'  '--' |   |
+  |    \          /    |
+   \    '.      .'    /
+    '.   '----'   .'
+      '-.______.-'
 
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __AX_SPEED_H
@@ -28,13 +16,69 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "ax_hal.h"
-
+#include "ax_hal.h"
 //电机PID闭环速度控制函数
 int16_t AX_SPEED_PidCtlA(float spd_target, float spd_current);   //PID控制函数，电机A
 int16_t AX_SPEED_PidCtlB(float spd_target, float spd_current);    //PID控制函数，电机B
 int16_t AX_SPEED_PidCtlC(float spd_target, float spd_current);    //PID控制函数，电机C
 int16_t AX_SPEED_PidCtlD(float spd_target, float spd_current);    //PID控制函数，电机D
 
+
+extern PID_Typedef A_PID;
+extern PID_Typedef B_PID;
+extern PID_Typedef C_PID;
+extern PID_Typedef D_PID;
+
+typedef struct{
+uint32_t Kp;
+uint32_t Ki;
+uint32_t Kd;
+uint32_t Kp_out;
+uint32_t Ki_out;
+uint32_t Kd_out;
+uint32_t I_OutMax;
+ float bias;
+float bias_last;
+} PID_Typedef;
+
+uint16_t PID_Handle(PID_Typedef *pid,float spd_target,float std_current);
+
+
+/* 结构体 */
+typedef struct {
+    double  RT;           /* 实时轮速 (m/s) */
+    float   TG;           /* 目标轮速 (m/s) */
+    short   PWM;          /* PWM 控制量 (±4200) */
+} ROBOT_Wheel;
+
+typedef struct {
+    short   RT_IX, RT_IY, RT_IW;    /* 实时速度 (×1000) */
+    short   TG_IX, TG_IY, TG_IW;    /* 目标速度 (×1000) */
+} ROBOT_Velocity;
+
+/* 麦轮底盘参数 */
+#define  PI                 3.1416f
+#define  PID_RATE           50
+#define  MEC_WHEEL_BASE     0.182       /* 轮距 (m) */
+#define  MEC_ACLE_BASE      0.124       /* 轴距 (m) */
+#define  MEC_WHEEL_DIAMETER  0.080      /* 轮径 (m) */
+#define  MEC_WHEEL_RESOLUTION  1560.0   /* 编码器 ppr */
+#define  MEC_WHEEL_SCALE     (PI * MEC_WHEEL_DIAMETER * PID_RATE / MEC_WHEEL_RESOLUTION)
+
+/* 速度限制 (×1000) */
+#define R_VX_LIMIT  1500
+#define R_VY_LIMIT  1200
+#define R_VW_LIMIT  6280
+
+/* 全局变量 */
+extern ROBOT_Velocity  R_Vel;
+extern ROBOT_Wheel     R_Wheel_A, R_Wheel_B, R_Wheel_C, R_Wheel_D;
+extern uint8_t         ax_robot_move_enable;
+extern int16_t         ax_motor_kp, ax_motor_kd;
+
+/* 目标速度接口 */
+void AX_ROBOT_SetSpeed(int16_t vx, int16_t vy, int16_t vw);
+void AX_ROBOT_Stop(void);
 
 #endif
 
