@@ -86,7 +86,7 @@ static pcnt_encoder_config_t *enc_init(int a, int b)
 }
 
 /*   
- *  内部: 舵机初始化 (50Hz)
+ *  内部: 舵机初始化 (50Hz)两个舵机共用一个 timer，分别占用两个 channel
  *    */
 static void servo_init(void)
 {
