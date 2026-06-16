@@ -16,22 +16,26 @@
 extern PID_Typedef A_PID={
 	800,
 	1000,
-	1
+	1,
+	4200,
 };
 extern PID_Typedef B_PID={
 	800,
 	1000,
-	1
+	1,
+	4200,
 };
 extern PID_Typedef C_PID={
 	800,
 	1000,
 	1,
+	4200,
 };
 extern PID_Typedef D_PID={
 	800,
 	1000,
 	1,
+	4200,
 };
 //外部声明变量，可以在Kinematics解算里面正常调用
 /*
@@ -54,6 +58,13 @@ uint16_t PID_Handle(PID_Typedef *pid,float spd_target,float std_current){
 	pid->Kd_out=pid->Kd*(pid->bias-pid->bias_last);
 	//输出PWM_out
 	pwm_out=pid->Kp_out+pid->Ki_out+pid->Kd_out;
+	//总输出限幅
+	if(pwm_out>=pid->pwm_out_max){
+		pwm_out=pid->pwm_out_max;
+	}
+	if(pwm_out<=-pid->pwm_out_max){
+		pwm_out=-pid->pwm_out_max;
+	}
 	return pwm_out;
 }
 
@@ -63,8 +74,8 @@ ROBOT_Wheel     R_Wheel_A, R_Wheel_B, R_Wheel_C, R_Wheel_D;
 uint8_t ax_robot_move_enable = 1;
 
 /**
-  * @简  述  设置机器人目标速度 — 唯一的对外速度接口
-  * @参  数  vx: X方向线速度 (×1000, 即千分之一 m/s)
+  * @简  述 设置机器人目标速度 — 唯一的对外速度接口
+  * @参  数(这一部分写的有歧义) vx: X方向线速度 (×1000, 即千分之一 m/s)
   *          vy: Y方向线速度 (×1000)
   *          vw: Z轴角速度  (×1000, 即千分之一 rad/s)
   *          例: AX_ROBOT_SetSpeed(500, 0, 0)  → X方向 0.5m/s 前进

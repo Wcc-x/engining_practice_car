@@ -1,16 +1,16 @@
-/**			                                                    
-	         ________
-      .-'        '-.
-    .'              '.
-   /   .--.    .--.   \
-  :   |    |  |    |   :
-  |   | '--'  '--' |   |
-  |    \          /    |
-   \    '.      .'    /
-    '.   '----'   .'
-      '-.______.-'
-
-/* Define to prevent recursive inclusion -------------------------------------*/
+/******************************************************************************
+ *
+ *    ██╗  ██╗███████╗██╗     ██╗ ██████╗ ███████╗
+ *    ██║  ██║██╔════╝██║     ██║██╔═══██╗██╔════╝
+ *    ███████║█████╗  ██║     ██║██║   ██║███████╗
+ *    ██╔══██║██╔══╝  ██║     ██║██║   ██║╚════██║
+ *    ██║  ██║███████╗███████╗██║╚██████╔╝███████║
+ *    ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝ ╚═════╝ ╚══════╝
+ *
+ *                    ☠ ROBOMASTER ☠
+ *                     HELIOS WCC
+ *
+ ******************************************************************************/
 #ifndef __AX_SPEED_H
 #define __AX_SPEED_H
 
@@ -18,11 +18,6 @@
 #include "ax_hal.h"
 #include "ax_hal.h"
 //电机PID闭环速度控制函数
-int16_t AX_SPEED_PidCtlA(float spd_target, float spd_current);   //PID控制函数，电机A
-int16_t AX_SPEED_PidCtlB(float spd_target, float spd_current);    //PID控制函数，电机B
-int16_t AX_SPEED_PidCtlC(float spd_target, float spd_current);    //PID控制函数，电机C
-int16_t AX_SPEED_PidCtlD(float spd_target, float spd_current);    //PID控制函数，电机D
-
 
 extern PID_Typedef A_PID;
 extern PID_Typedef B_PID;
@@ -30,13 +25,14 @@ extern PID_Typedef C_PID;
 extern PID_Typedef D_PID;
 
 typedef struct{
-uint32_t Kp;
-uint32_t Ki;
-uint32_t Kd;
-uint32_t Kp_out;
-uint32_t Ki_out;
-uint32_t Kd_out;
-uint32_t I_OutMax;
+float Kp;
+float Ki;
+float Kd;
+float pwm_out_max;
+float Kp_out;
+float Ki_out;
+float Kd_out;
+float I_OutMax;
  float bias;
 float bias_last;
 } PID_Typedef;
@@ -74,7 +70,6 @@ typedef struct {
 extern ROBOT_Velocity  R_Vel;
 extern ROBOT_Wheel     R_Wheel_A, R_Wheel_B, R_Wheel_C, R_Wheel_D;
 extern uint8_t         ax_robot_move_enable;
-extern int16_t         ax_motor_kp, ax_motor_kd;
 
 /* 目标速度接口 */
 void AX_ROBOT_SetSpeed(int16_t vx, int16_t vy, int16_t vw);

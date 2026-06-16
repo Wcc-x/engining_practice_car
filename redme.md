@@ -11,3 +11,5 @@
 ### robot/ax_speed部分主要是四个电机的pid调用环节，写的很一般，但确实方便，只要给定两个参数就可以了
 ### Robot/ax_robot是给电机留下接口,个人感觉写的没什么用
 ### Robot/ax_Kinematic为四个电机的麦克轮子解算，186行double R  = MEC_WHEEL_BASE / 2.0 + MEC_ACLE_BASE / 2.0;   /* 0.153 m */，是个性化适配需要修改的参数
+
+## 之前那一版本写的太大便了，我重构了
