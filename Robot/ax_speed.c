@@ -58,6 +58,7 @@ uint16_t PID_Handle(PID_Typedef *pid,float spd_target,float std_current){
 	pid->Kd_out=pid->Kd*(pid->bias-pid->bias_last);
 	//输出PWM_out
 	pwm_out=pid->Kp_out+pid->Ki_out+pid->Kd_out;
+	pid->bias_last=pid->bias;
 	//总输出限幅
 	if(pwm_out>=pid->pwm_out_max){
 		pwm_out=pid->pwm_out_max;

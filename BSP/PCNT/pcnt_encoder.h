@@ -23,8 +23,8 @@ extern "C" {
 #define PCNT_ENCODER_3_A_GPIO        GPIO_NUM_8
 #define PCNT_ENCODER_3_B_GPIO        GPIO_NUM_9
 
-#define PCNT_ENCODER_4_A_GPIO        GPIO_NUM_10
-#define PCNT_ENCODER_4_B_GPIO        GPIO_NUM_11
+#define PCNT_ENCODER_4_A_GPIO        GPIO_NUM_14
+#define PCNT_ENCODER_4_B_GPIO        GPIO_NUM_15
 /* ---------- 编码器物理参数 ---------- */
 #define PCNT_ENCODER_PULSES_PER_REV  11      /* 电机每转单相霍尔脉冲数          */
 #define PCNT_ENCODER_GLITCH_NS       1000    /* 毛刺滤波时间（纳秒）             */

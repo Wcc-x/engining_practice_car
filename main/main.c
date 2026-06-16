@@ -19,9 +19,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
-#include "ax_robot.h"
 #include "ax_kinematics.h"
 #include "ax_ble.h"
+#include "ax_speed.h"
 
 /*   
  *  摇杆量程映射

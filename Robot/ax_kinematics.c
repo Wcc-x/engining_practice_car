@@ -70,15 +70,15 @@ void AX_ROBOT_Kinematics(void)
      *
      *  B/D 轮符号取反: 电机物理安装方向与 A/C 相对
      *    */
-    R_Wheel_A.RT = (double)((int16_t)AX_ENCODER_A_GetCounter()) * MEC_WHEEL_SCALE;
-    AX_ENCODER_A_SetCounter(0);
-    R_Wheel_B.RT = (double)(-(int16_t)AX_ENCODER_B_GetCounter()) * MEC_WHEEL_SCALE;
-    AX_ENCODER_B_SetCounter(0);
-    R_Wheel_C.RT = (double)( (int16_t)AX_ENCODER_C_GetCounter()) * MEC_WHEEL_SCALE;
-    AX_ENCODER_C_SetCounter(0);
-    R_Wheel_D.RT = (double)(-(int16_t)AX_ENCODER_D_GetCounter()) * MEC_WHEEL_SCALE;
-    AX_ENCODER_D_SetCounter(0);
-
+    R_Wheel_A.RT = (double)AX_ENCODER_A_GetCounter() * MEC_WHEEL_SCALE;
+    AX_ENCODER_A_Reset();
+    R_Wheel_B.RT = (double)(-AX_ENCODER_B_GetCounter()) * MEC_WHEEL_SCALE;
+    AX_ENCODER_B_Reset();
+    R_Wheel_C.RT = (double)AX_ENCODER_C_GetCounter() * MEC_WHEEL_SCALE;
+    AX_ENCODER_C_Reset();
+    R_Wheel_D.RT = (double)(-AX_ENCODER_D_GetCounter()) * MEC_WHEEL_SCALE;
+    AX_ENCODER_D_Reset();
+  //RT是received target，TG是target goal，PWM是最终输出的PWM值
     /*   
      *  Step 2 — 运动学正解: 四轮线速度 → 机器人速度
      *
