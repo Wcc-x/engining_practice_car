@@ -27,9 +27,9 @@
 #include "ax_robot.h"
 #include "ax_speed.h"
 
-/* ============================================================
+/*   
  *  麦轮底盘运动模型 (Mecanum Wheel Kinematics)
- * ============================================================
+ *   
  *
  *   轮编号 (俯视图, X 前进, Y 左移):
  *
@@ -55,9 +55,9 @@
  *   辊子安装方向: A/D ↙↖ (左旋), B/C ↗↘ (右旋)
  *   辊子角度: 45° (标准麦轮)
  *
- * ============================================================
+ *   
  *  运动学公式
- * ============================================================
+ *   
  *
  *   正解 (轮速 → 机器人速度):
  *     Vx = ( Va + Vb + Vc + Vd) / 4
@@ -71,9 +71,9 @@
  *     Vc = Vx + Vy - Vω × R
  *     Vd = Vx - Vy + Vω × R
  *
- * ============================================================
+ *   
  *  编码器接口 (ESP32 PCNT 4x 正交解码)
- * ============================================================
+ *   
  *
  *   每转脉冲数: 13线霍尔 × 减速比30 × 4x解码 = 1560 ppr
  *   速度系数:   WHEEL_SCALE = π × D × PID_RATE / ppr
@@ -84,18 +84,18 @@
  *     AX_ENCODER_X_SetCounter(0)         → 硬件清零
  *     speed = count × WHEEL_SCALE        → 转为 m/s
  *
- * ============================================================
+ *   
  *  PID 控制
- * ============================================================
+ *   
  *
  *   增量式 PD 控制:
  *     bias   = spd_target - spd_current
  *     pwm   += Kp × bias + Kd × (bias - bias_last)
  *     pwm    钳位在 ±4200
  *
- * ============================================================
+ *   
  *  PWM 输出接口 (ESP32 LEDC)
- * ============================================================
+ *   
  *
  *   AX_MOTOR_X_SetSpeed(pwm):
  *     pwm > 0  → GPIO_DIR=HIGH, 占空比 = |pwm|/4200×100%
@@ -150,7 +150,7 @@ void AX_ROBOT_Stop(void)
   */
 void AX_ROBOT_Kinematics(void)
 {
-    /* ============================================================
+    /*   
      *  Step 1 — 编码器接口: 读 PCNT 硬件 → 清零 → 轮速 (m/s)
      *
      *  AX_ENCODER_X_GetCounter()  → 直接读 PCNT 硬件累加器
@@ -159,7 +159,7 @@ void AX_ROBOT_Kinematics(void)
      *  count × WHEEL_SCALE → 线速度 (m/s)
      *
      *  B/D 轮符号取反: 电机物理安装方向与 A/C 相对
-     * ============================================================ */
+     *    */
     R_Wheel_A.RT = (double)((int16_t)AX_ENCODER_A_GetCounter()) * MEC_WHEEL_SCALE;
     AX_ENCODER_A_SetCounter(0);
     R_Wheel_B.RT = (double)(-(int16_t)AX_ENCODER_B_GetCounter()) * MEC_WHEEL_SCALE;
@@ -169,7 +169,7 @@ void AX_ROBOT_Kinematics(void)
     R_Wheel_D.RT = (double)(-(int16_t)AX_ENCODER_D_GetCounter()) * MEC_WHEEL_SCALE;
     AX_ENCODER_D_SetCounter(0);
 
-    /* ============================================================
+    /*   
      *  Step 2 — 运动学正解: 四轮线速度 → 机器人速度
      *
      *  Va, Vb, Vc, Vd = 四轮线速度 (m/s)
@@ -178,7 +178,7 @@ void AX_ROBOT_Kinematics(void)
      *  Vx = ( Va + Vb + Vc + Vd) / 4          ← 前进速度 (m/s)
      *  Vy = (-Va + Vb + Vc - Vd) / 4          ← 横移速度 (m/s)
      *  Vω = (-Va + Vb - Vc + Vd) / 4 / R      ← 旋转角速度 (rad/s)
-     * ============================================================ */
+     *    */
     double va = R_Wheel_A.RT;
     double vb = R_Wheel_B.RT;
     double vc = R_Wheel_C.RT;
@@ -194,12 +194,12 @@ void AX_ROBOT_Kinematics(void)
     R_Vel.RT_IY = (short)(r_fy * 1000.0);
     R_Vel.RT_IW = (short)(r_fw * 1000.0);
 
-    /* ============================================================
+    /*   
      *  Step 3 — 目标速度限幅 & 运动使能检查
      *
      *  限幅: |Vx| ≤ 1.5 m/s, |Vy| ≤ 1.2 m/s, |Vω| ≤ 2π rad/s
      *  使能关 → 目标清零 → 机器人自然停转 (PID 会将偏差收敛到 0)
-     * ============================================================ */
+     *    */
     if (ax_robot_move_enable == 0) {
         R_Vel.TG_IX = 0;
         R_Vel.TG_IY = 0;
@@ -218,14 +218,14 @@ void AX_ROBOT_Kinematics(void)
     float ty = R_Vel.TG_IY / 1000.0f;
     float tw = R_Vel.TG_IW / 1000.0f;
 
-    /* ============================================================
+    /*   
      *  Step 4 — 运动学逆解: 机器人目标速度 → 四轮目标线速度 (m/s)
      *
      *  Va = Vx - Vy - Vω × R
      *  Vb = Vx + Vy + Vω × R
      *  Vc = Vx + Vy - Vω × R
      *  Vd = Vx - Vy + Vω × R
-     * ============================================================ */
+     *    */
     float r  = (float)R;  /* R = Lw/2 + La/2 */
 
     R_Wheel_A.TG = tx - ty - tw * r;
@@ -233,20 +233,20 @@ void AX_ROBOT_Kinematics(void)
     R_Wheel_C.TG = tx + ty - tw * r;
     R_Wheel_D.TG = tx - ty + tw * r;
 
-    /* ============================================================
+    /*   
      *  Step 5 — PID 控制: 目标速度 vs 实际速度 → PWM (-4200 ~ +4200)
      *
      *  AX_SPEED_PidCtlX(target, current):
      *    bias = target - current
      *    pwm += Kp × bias + Kd × (bias - bias_last)
      *    pwm 钳位 ±4200
-     * ============================================================ */
+     *    */
     R_Wheel_A.PWM = AX_SPEED_PidCtlA(R_Wheel_A.TG, (float)R_Wheel_A.RT);
     R_Wheel_B.PWM = AX_SPEED_PidCtlB(R_Wheel_B.TG, (float)R_Wheel_B.RT);
     R_Wheel_C.PWM = AX_SPEED_PidCtlC(R_Wheel_C.TG, (float)R_Wheel_C.RT);
     R_Wheel_D.PWM = AX_SPEED_PidCtlD(R_Wheel_D.TG, (float)R_Wheel_D.RT);
 
-    /* ============================================================
+    /*   
      *  Step 6 — PWM 输出接口: 驱动 ESP32 LEDC 硬件
      *
      *  AX_MOTOR_X_SetSpeed(pwm):
@@ -254,7 +254,7 @@ void AX_ROBOT_Kinematics(void)
      *    pwm < 0 → GPIO_DIR=LOW  (后退), LEDC占空比=|pwm|/4200×100%
      *
      *  A/B 反向, C/D 正向 (配合实物电机安装方向)
-     * ============================================================ */
+     *    */
     AX_MOTOR_A_SetSpeed(-R_Wheel_A.PWM);
     AX_MOTOR_B_SetSpeed(-R_Wheel_B.PWM);
     AX_MOTOR_C_SetSpeed( R_Wheel_C.PWM);

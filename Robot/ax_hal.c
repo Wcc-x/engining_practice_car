@@ -7,9 +7,9 @@
 #include "esp_timer.h"
 #include <stdlib.h>
 
-/* ============================================================
+/*   
  *  BSP 实例指针
- * ============================================================ */
+ *    */
 ledc_config_t *ax_motor_a_cfg;
 ledc_config_t *ax_motor_b_cfg;
 ledc_config_t *ax_motor_c_cfg;
@@ -20,16 +20,16 @@ pcnt_encoder_config_t *ax_encoder_b_cfg;
 pcnt_encoder_config_t *ax_encoder_c_cfg;
 pcnt_encoder_config_t *ax_encoder_d_cfg;
 
-/* ============================================================
+/*   
  *  舵机内部句柄
- * ============================================================ */
+ *    */
 static ledc_channel_t servo_s1_ch = LEDC_CHANNEL_5;
 static ledc_channel_t servo_s2_ch = LEDC_CHANNEL_6;
 static ledc_timer_t   servo_tmr  = LEDC_TIMER_2;
 
-/* ============================================================
+/*   
  *  内部: 电机 LEDC PWM 初始化
- * ============================================================ */
+ *    */
 static ledc_config_t *motor_pwm_init(ledc_timer_t tmr, ledc_channel_t ch, int gpio)
 {
     ledc_config_t *c = malloc(sizeof(ledc_config_t));
@@ -44,13 +44,13 @@ static ledc_config_t *motor_pwm_init(ledc_timer_t tmr, ledc_channel_t ch, int gp
     return c;
 }
 
-/* ============================================================
+/*   
  *  内部: 单路电机驱动 — IN1/IN2 H桥模式
  *
  *  pwm > 0  正转: IN1=1 IN2=0
  *  pwm < 0  反转: IN1=0 IN2=1
  *  pwm = 0  停止: IN1=0 IN2=0
- * ============================================================ */
+ *    */
 static void motor_set_speed(ledc_config_t *cfg,
                             gpio_num_t in1, gpio_num_t in2, int16_t pwm)
 {
@@ -71,9 +71,9 @@ static void motor_set_speed(ledc_config_t *cfg,
     ledc_pwm_set_duty(cfg, duty);
 }
 
-/* ============================================================
+/*   
  *  内部: 编码器初始化
- * ============================================================ */
+ *    */
 static pcnt_encoder_config_t *enc_init(int a, int b)
 {
     pcnt_encoder_config_t *e = malloc(sizeof(pcnt_encoder_config_t));
@@ -85,9 +85,9 @@ static pcnt_encoder_config_t *enc_init(int a, int b)
     return e;
 }
 
-/* ============================================================
+/*   
  *  内部: 舵机初始化 (50Hz)
- * ============================================================ */
+ *    */
 static void servo_init(void)
 {
     ledc_timer_config_t tcfg = {
@@ -127,9 +127,9 @@ static void servo_set_angle(ledc_channel_t ch, int16_t raw)
     ledc_update_duty(LEDC_LOW_SPEED_MODE, ch);
 }
 
-/* ============================================================
+/*   
  *  HAL 公共接口
- * ============================================================ */
+ *    */
 
 void AX_HAL_Init(void)
 {

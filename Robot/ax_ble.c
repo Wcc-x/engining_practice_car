@@ -46,18 +46,18 @@ static const char *TAG = "AX_BLE";
 /* NimBLE store config — declared in ble_store_config.c (no public header) */
 extern void ble_store_config_init(void);
 
-/* ============================================================
+/*   
  *  设备名称
- * ============================================================ */
+ *    */
 #define DEVICE_NAME  "XTARK-ESP32"
 
-/* ============================================================
+/*   
  *  NUS UUID 128-bit (Nordic UART Service, 小端序)
  *
  *  标准: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E
  *  NimBLE BLE_UUID128_INIT 按 LSB 顺序排列:
  *      9E CA DC 24 0E E5 A9 E0 93 F3 A3 B5 01 00 40 6E
- * ============================================================ */
+ *    */
 
 static const ble_uuid128_t nus_svc_uuid = BLE_UUID128_INIT(
     0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0,
@@ -76,17 +76,17 @@ static const ble_uuid128_t nus_tx_uuid = BLE_UUID128_INIT(
     0x93, 0xF3, 0xA3, 0xB5, 0x03, 0x00, 0x40, 0x6E
 );
 
-/* ============================================================
+/*   
  *  GATT 句柄 & 运行时状态
- * ============================================================ */
+ *    */
 static uint16_t nus_rx_val_handle;
 static uint16_t nus_tx_val_handle;
 static uint16_t conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static bool     tx_notify_enabled;
 
-/* ============================================================
+/*   
  *  全局数据 (对外暴露, 见 ax_ble.h)
- * ============================================================ */
+ *    */
 AX_BLE_Joystick  ax_ble_joystick;
 AX_BLE_Slider    ax_ble_slider;
 AX_BLE_Key       ax_ble_key;
@@ -100,9 +100,9 @@ uint16_t ax_ble_rx_len;
 static char   pkt_buf[256];
 static uint8_t pkt_idx;
 
-/* ============================================================
+/*   
  *  前向声明
- * ============================================================ */
+ *    */
 static int  nus_gap_event_handler(struct ble_gap_event *event, void *arg);
 static int  nus_gatt_access_cb(uint16_t c_handle, uint16_t attr_handle,
                                 struct ble_gatt_access_ctxt *ctxt, void *arg);
@@ -112,12 +112,12 @@ static void nus_on_stack_sync(void);
 static void nus_on_stack_reset(int reason);
 void        nus_gatt_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg);
 
-/* ============================================================
+/*   
  *  GATT 服务表 — Nordic UART Service
  *
  *  注意: CCCD 由 NimBLE 自动添加, 不要手动声明!
  *        其句柄 = nus_tx_val_handle + 1
- * ============================================================ */
+ *    */
 static const struct ble_gatt_svc_def nus_gatt_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -143,9 +143,9 @@ static const struct ble_gatt_svc_def nus_gatt_svcs[] = {
     { 0 }
 };
 
-/* ============================================================
+/*   
  *  GATT 注册回调
- * ============================================================ */
+ *    */
 void nus_gatt_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
 {
     (void)arg;
@@ -172,9 +172,9 @@ void nus_gatt_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
     }
 }
 
-/* ============================================================
+/*   
  *  mbuf → flat buffer 辅助函数
- * ============================================================ */
+ *    */
 static int gatt_write_to_buf(struct os_mbuf *om, uint16_t max_len,
                               void *dst, uint16_t *out_len)
 {
@@ -190,11 +190,11 @@ static int gatt_write_to_buf(struct os_mbuf *om, uint16_t max_len,
     return 0;
 }
 
-/* ============================================================
+/*   
  *  GATT 访问回调
  *    attr_handle == nus_rx_val_handle         → RX Write
  *    attr_handle == nus_tx_val_handle + 1     → CCCD Write (NimBLE auto)
- * ============================================================ */
+ *    */
 static int nus_gatt_access_cb(uint16_t c_handle, uint16_t attr_handle,
                                struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
@@ -256,9 +256,9 @@ static int nus_gatt_access_cb(uint16_t c_handle, uint16_t attr_handle,
     return BLE_ATT_ERR_UNLIKELY;
 }
 
-/* ============================================================
+/*   
  *  GAP 事件处理
- * ============================================================ */
+ *    */
 static int nus_gap_event_handler(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
@@ -315,9 +315,9 @@ static int nus_gap_event_handler(struct ble_gap_event *event, void *arg)
     }
 }
 
-/* ============================================================
+/*   
  *  广播
- * ============================================================ */
+ *    */
 static void nus_start_advertising(void)
 {
     struct ble_hs_adv_fields adv_fields = {0};
@@ -350,9 +350,9 @@ static void nus_start_advertising(void)
     ESP_LOGI(TAG, "Advertising started as '%s'", DEVICE_NAME);
 }
 
-/* ============================================================
+/*   
  *  NimBLE 栈回调
- * ============================================================ */
+ *    */
 static void nus_on_stack_sync(void)
 {
     int rc;
@@ -382,9 +382,9 @@ static void nus_on_stack_reset(int reason)
     ESP_LOGI(TAG, "NimBLE stack reset, reason=%d", reason);
 }
 
-/* ============================================================
+/*   
  *  NimBLE Host 配置 & 任务
- * ============================================================ */
+ *    */
 static void nimble_host_config_init(void)
 {
     ble_hs_cfg.reset_cb             = nus_on_stack_reset;
@@ -401,9 +401,9 @@ static void nimble_host_task(void *param)
     vTaskDelete(NULL);
 }
 
-/* ============================================================
+/*   
  *  公共 API
- * ============================================================ */
+ *    */
 
 void AX_BLE_Init(const char *device_name)
 {
@@ -471,9 +471,9 @@ int AX_BLE_Send(const uint8_t *data, uint16_t len)
     return rc;
 }
 
-/* ============================================================
+/*   
  *  数据包解析器
- * ============================================================ */
+ *    */
 
 #define MAX_TOKENS  10
 

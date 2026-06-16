@@ -1,7 +1,7 @@
 #include "pcnt_encoder.h"
 #include "esp_timer.h"
 
-/* ============================================================
+/*   
  *  初始化 — 双通道 4x 正交解码
  *
  *  通道A: edge=MA, level=MB
@@ -13,7 +13,7 @@
  *  反转 (B超前A) 每AB周期: A↓(-1) + B↑(-1) + A↑(-1) + B↓(-1) = -4
  *
  *  accum_count=true → 驱动内部自动累加溢出，无需 ISR
- * ============================================================ */
+ *    */
 void pcnt_encoder_init(pcnt_encoder_config_t *enc)
 {
     /* ---------- 1. 创建 PCNT 单元（accum_count 自动处理溢出） ---------- */
@@ -69,12 +69,12 @@ void pcnt_encoder_init(pcnt_encoder_config_t *enc)
     enc->last_pulse_count  = 0;
 }
 
-/* ============================================================
+/*   
  *  读累积脉冲数（正转+ / 反转-）
  *
  *  accum_count=true 下，pcnt_unit_get_count 直接返回累加后的
  *  32 位有符号值，无需任何溢出修正。
- * ============================================================ */
+ *    */
 int64_t pcnt_encoder_get_pulse_count(pcnt_encoder_config_t *enc)
 {
     int count = 0;
@@ -83,14 +83,14 @@ int64_t pcnt_encoder_get_pulse_count(pcnt_encoder_config_t *enc)
     return enc->total_pulse_count;
 }
 
-/* ============================================================
+/*   
  *  更新转速(RPM)和角度(°)
  *
  *  4x 解码：每 AB 周期计 4 次 → 每转计数 = 4 × pulses_per_rev
  *
  *  RPM = (Δ脉冲 / 每转计数) / (Δ微秒 / 60,000,000)
  *  角度 = (总脉冲 % 每转计数) × 360° / 每转计数
- * ============================================================ */
+ *    */
 void pcnt_encoder_update(pcnt_encoder_config_t *enc)
 {
     /* ---------- 1. 读当前脉冲 ---------- */
@@ -125,9 +125,9 @@ void pcnt_encoder_update(pcnt_encoder_config_t *enc)
     enc->last_update_us   = now_us;
 }
 
-/* ============================================================
+/*   
  *  Getter
- * ============================================================ */
+ *    */
 float pcnt_encoder_get_speed_rpm(const pcnt_encoder_config_t *enc)
 {
     return enc->speed_rpm;
@@ -138,9 +138,9 @@ float pcnt_encoder_get_angle_deg(const pcnt_encoder_config_t *enc)
     return enc->position_deg;
 }
 
-/* ============================================================
+/*   
  *  归零
- * ============================================================ */
+ *    */
 void pcnt_encoder_reset(pcnt_encoder_config_t *enc)
 {
     pcnt_unit_clear_count(enc->pcnt_unit);
@@ -151,9 +151,9 @@ void pcnt_encoder_reset(pcnt_encoder_config_t *enc)
     enc->last_update_us    = esp_timer_get_time();
 }
 
-/* ============================================================
+/*   
  *  反初始化
- * ============================================================ */
+ *    */
 void pcnt_encoder_deinit(pcnt_encoder_config_t *enc)
 {
     if (enc->pcnt_unit) {

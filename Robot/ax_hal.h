@@ -31,9 +31,9 @@
 extern "C" {
 #endif
 
-/* ============================================================
+/*   
  *  电机 IN1/IN2 引脚 (H桥方向控制)
- * ============================================================ */
+ *    */
 #define AX_MOTOR_A_IN1_GPIO     GPIO_NUM_0
 #define AX_MOTOR_A_IN2_GPIO     GPIO_NUM_18
 #define AX_MOTOR_B_IN1_GPIO     GPIO_NUM_3
@@ -43,31 +43,31 @@ extern "C" {
 #define AX_MOTOR_D_IN1_GPIO     GPIO_NUM_13
 #define AX_MOTOR_D_IN2_GPIO     GPIO_NUM_22
 
-/* ============================================================
+/*   
  *  编码器引脚
- * ============================================================ */
+ *    */
 #define AX_ENCODER_C_A_GPIO     GPIO_NUM_8
 #define AX_ENCODER_C_B_GPIO     GPIO_NUM_9
 #define AX_ENCODER_D_A_GPIO     GPIO_NUM_14
 #define AX_ENCODER_D_B_GPIO     GPIO_NUM_15
 
-/* ============================================================
+/*   
  *  舵机引脚
- * ============================================================ */
+ *    */
 #define AX_SERVO_S1_GPIO        GPIO_NUM_16
 #define AX_SERVO_S2_GPIO        GPIO_NUM_17
 #define AX_SERVO_FREQ_HZ        50
 #define AX_SERVO_MIN_US         500
 #define AX_SERVO_MAX_US         2500
 
-/* ============================================================
+/*   
  *  电机 PWM 参数
- * ============================================================ */
+ *    */
 #define AX_MOTOR_PWM_MAX        4200
 
-/* ============================================================
+/*   
  *  HAL API
- * ============================================================ */
+ *    */
 void AX_HAL_Init(void);
 
 /* 编码器 */
