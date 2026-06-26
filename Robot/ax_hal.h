@@ -7,13 +7,13 @@
  *   - BSP\PCNT\pcnt_encoder.h/.c    → pcnt_encoder_init() / get / update / reset / deinit
  *
  * 引脚映射:
- *   Motor A: PWM=GPIO1,  IN1=GPIO0,  IN2=GPIO18
- *   Motor B: PWM=GPIO2,  IN1=GPIO3,  IN2=GPIO19
- *   Motor C: PWM=GPIO10, IN1=GPIO12, IN2=GPIO21
- *   Motor D: PWM=GPIO11, IN1=GPIO13, IN2=GPIO22
+ *   Motor A: PWM=GPIO23, IN1=GPIO0,  IN2=GPIO18
+ *   Motor B: PWM=GPIO2,  IN1=GPIO25, IN2=GPIO19
+ *   Motor C: PWM=GPIO26, IN1=GPIO12, IN2=GPIO21
+ *   Motor D: PWM=GPIO27, IN1=GPIO13, IN2=GPIO22
  *   Encoder A: A=4  B=5
- *   Encoder B: A=6  B=7
- *   Encoder C: A=8  B=9
+ *   Encoder B: A=32 B=33
+ *   Encoder C: A=34 B=35
  *   Encoder D: A=14 B=15
  *   Servo S1: GPIO16, Servo S2: GPIO17
  *
@@ -39,7 +39,7 @@ extern "C" {
 
 #define AX_MOTOR_A_IN1_GPIO     GPIO_NUM_0
 #define AX_MOTOR_A_IN2_GPIO     GPIO_NUM_18
-#define AX_MOTOR_B_IN1_GPIO     GPIO_NUM_3
+#define AX_MOTOR_B_IN1_GPIO     GPIO_NUM_25   /* 原 GPIO3=UART0_RX 冲突，换至 GPIO25 */
 #define AX_MOTOR_B_IN2_GPIO     GPIO_NUM_19
 #define AX_MOTOR_C_IN1_GPIO     GPIO_NUM_12
 #define AX_MOTOR_C_IN2_GPIO     GPIO_NUM_21
@@ -48,8 +48,8 @@ extern "C" {
 
 /* ─────────────── 编码器引脚 (C/D 为自定义扩展，BSP 只定义了 1/2 号) ─────────────── */
 
-#define AX_ENCODER_C_A_GPIO     GPIO_NUM_8
-#define AX_ENCODER_C_B_GPIO     GPIO_NUM_9
+#define AX_ENCODER_C_A_GPIO     GPIO_NUM_34   /* 原 GPIO8=Flash 冲突 */
+#define AX_ENCODER_C_B_GPIO     GPIO_NUM_35   /* 原 GPIO9=Flash 冲突 */
 #define AX_ENCODER_D_A_GPIO     GPIO_NUM_14
 #define AX_ENCODER_D_B_GPIO     GPIO_NUM_15
 

@@ -14,6 +14,10 @@
  ******************************************************************************/
 #include "ax_kinematics.h"
 #include "ax_speed.h"
+#include <stdio.h>
+
+/* ── 诊断用: 调用计数 (每 50 次 ≈ 1Hz 打印一次) ── */
+static int  kin_dbg_cnt = 0;
 
 /*   
  *  麦轮底盘运动模型 (Mecanum Wheel Kinematics)
@@ -116,12 +120,34 @@ void AX_ROBOT_Kinematics(void)
         R_Vel.TG_IW = 0;
     }
 
+    /* ★ 目标为零时重置积分 → 彻底消除积分饱和 */
+    static short prev_tg_zero = 0;
+    short      is_tg_zero = (R_Vel.TG_IX == 0 && R_Vel.TG_IY == 0 && R_Vel.TG_IW == 0);
+    if (is_tg_zero) {
+        PID_ResetIntegral(&A_PID);
+        PID_ResetIntegral(&B_PID);
+        PID_ResetIntegral(&C_PID);
+        PID_ResetIntegral(&D_PID);
+    }
+    if (is_tg_zero != prev_tg_zero) {
+        printf("[KIN] PID integral %s\n", is_tg_zero ? "RESET (TG=0)" : "ACTIVE (TG≠0)");
+        prev_tg_zero = is_tg_zero;
+    }
+
     if (R_Vel.TG_IX >  R_VX_LIMIT) R_Vel.TG_IX =  R_VX_LIMIT;
     if (R_Vel.TG_IX < -R_VX_LIMIT) R_Vel.TG_IX = -R_VX_LIMIT;
     if (R_Vel.TG_IY >  R_VY_LIMIT) R_Vel.TG_IY =  R_VY_LIMIT;
     if (R_Vel.TG_IY < -R_VY_LIMIT) R_Vel.TG_IY = -R_VY_LIMIT;
     if (R_Vel.TG_IW >  R_VW_LIMIT) R_Vel.TG_IW =  R_VW_LIMIT;
     if (R_Vel.TG_IW < -R_VW_LIMIT) R_Vel.TG_IW = -R_VW_LIMIT;
+
+    /* ★ 诊断: Step 3 结果 (约 1Hz) */
+    if (kin_dbg_cnt++ % 50 == 0) {
+        printf("[KIN] Step3: move_en=%d | TG_IX=%d TG_IY=%d TG_IW=%d | RT_IX=%d RT_IY=%d RT_IW=%d\n",
+               ax_robot_move_enable,
+               R_Vel.TG_IX, R_Vel.TG_IY, R_Vel.TG_IW,
+               R_Vel.RT_IX, R_Vel.RT_IY, R_Vel.RT_IW);
+    }
 
     /* 整型 → 浮点 (m/s, rad/s) */
     float tx = R_Vel.TG_IX / 1000.0f;
@@ -156,7 +182,26 @@ void AX_ROBOT_Kinematics(void)
     R_Wheel_B.PWM = PID_Handle(&B_PID,R_Wheel_B.TG, (float)R_Wheel_B.RT);
     R_Wheel_C.PWM = PID_Handle(&C_PID,R_Wheel_C.TG, (float)R_Wheel_C.RT);
     R_Wheel_D.PWM = PID_Handle(&D_PID,R_Wheel_D.TG, (float)R_Wheel_D.RT);
-    /*   
+
+    /* ★ 诊断: Step 5 PID 输出 (约 1Hz, 仅当有目标时打印详情) */
+    if (kin_dbg_cnt % 50 == 1) {
+        int any_tg = (R_Wheel_A.TG != 0.0f || R_Wheel_B.TG != 0.0f ||
+                      R_Wheel_C.TG != 0.0f || R_Wheel_D.TG != 0.0f);
+        if (any_tg) {
+            printf("[KIN] Step5 PID:  TG A=%.3f B=%.3f C=%.3f D=%.3f (m/s)\n",
+                   (double)R_Wheel_A.TG, (double)R_Wheel_B.TG,
+                   (double)R_Wheel_C.TG, (double)R_Wheel_D.TG);
+            printf("[KIN] Step5 PID:  RT A=%.3f B=%.3f C=%.3f D=%.3f (m/s)\n",
+                   R_Wheel_A.RT, R_Wheel_B.RT, R_Wheel_C.RT, R_Wheel_D.RT);
+            printf("[KIN] Step5 PID: PWM A=%.1f B=%.1f C=%.1f D=%.1f | bias A=%.3f B=%.3f C=%.3f D=%.3f\n",
+                   (double)R_Wheel_A.PWM, (double)R_Wheel_B.PWM,
+                   (double)R_Wheel_C.PWM, (double)R_Wheel_D.PWM,
+                   (double)A_PID.bias, (double)B_PID.bias,
+                   (double)C_PID.bias, (double)D_PID.bias);
+        }
+    }
+
+    /*
      *  Step 6 — PWM 输出接口: 驱动 ESP32 LEDC 硬件
      *
      *  AX_MOTOR_X_SetSpeed(pwm):
@@ -165,10 +210,18 @@ void AX_ROBOT_Kinematics(void)
      *
      *  A/B 反向, C/D 正向 (配合实物电机安装方向)
      *    */
+    /* ★ 诊断: Step 6 最终电机指令 */
+    if (kin_dbg_cnt % 50 == 1 &&
+        (R_Wheel_A.PWM || R_Wheel_B.PWM || R_Wheel_C.PWM || R_Wheel_D.PWM)) {
+        printf("[KIN] Step6 MOTOR: A=%.1f B=%.1f C=%.1f D=%.1f (PWM raw)\n",
+               (double)(-R_Wheel_A.PWM), (double)(-R_Wheel_B.PWM),
+               (double)R_Wheel_C.PWM, (double)R_Wheel_D.PWM);
+    }
+
     AX_MOTOR_A_SetSpeed(-R_Wheel_A.PWM);
     AX_MOTOR_B_SetSpeed(-R_Wheel_B.PWM);
     AX_MOTOR_C_SetSpeed( R_Wheel_C.PWM);
     AX_MOTOR_D_SetSpeed( R_Wheel_D.PWM);
 }
 
-/******************* (C) 版权 2023 XTARK **************************************/
+

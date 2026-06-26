@@ -63,15 +63,24 @@ typedef struct {
     bool    is_down;        /* true=按下, false=松开 */
 } AX_BLE_Key;
 
-/*   
+/*
  *  全局数据（实时更新）
+ *
+ *  volatile 必要性说明:
+ *  这些变量在 NimBLE Host 任务(GATT 回调)中写入, 在 app_main 主循环中读取。
+ *  不加 volatile 时编译器可能将主循环中的读取优化为寄存器缓存, 导致永远
+ *  看不到 BLE 任务写入的新数据。
+ *  注意: volatile 不保证原子性, 但对于传感器类控制数据(单写者/单读者),
+ *  读到中间状态(旧+新的混合)是可接受的，不会导致安全问题。
  *    */
-extern AX_BLE_Joystick  ax_ble_joystick;
-extern AX_BLE_Slider    ax_ble_slider;
-extern AX_BLE_Key       ax_ble_key;
-extern bool              ax_ble_connected;    /* 蓝牙连接状态 */
-extern uint8_t           ax_ble_rx_buf[];     /* 接收缓冲区 (调试用) */
-extern uint16_t          ax_ble_rx_len;       /* 接收数据长度 */
+extern volatile AX_BLE_Joystick  ax_ble_joystick;
+extern volatile AX_BLE_Slider    ax_ble_slider;
+extern volatile AX_BLE_Key       ax_ble_key;
+extern volatile bool              ax_ble_connected;    /* 蓝牙连接状态 */
+extern volatile uint8_t           ax_ble_rx_buf[];     /* 接收缓冲区 (调试用) */
+extern volatile uint16_t          ax_ble_rx_len;       /* 接收数据长度 */
+extern volatile uint32_t          ax_ble_gap_evt_cnt;  /* GAP 事件计数 (调试) */
+extern volatile uint16_t          ax_ble_gap_last_evt; /* 最近 GAP 事件类型 (调试) */
 
 /*   
  *  API
@@ -84,10 +93,19 @@ extern uint16_t          ax_ble_rx_len;       /* 接收数据长度 */
 void AX_BLE_Init(const char *device_name);
 
 /**
+ * @brief  注册 GATT 服务并启动广播 (必须在 NimBLE sync 后调用)
+ *         需要在 AX_BLE_Init 之后、NimBLE host 任务就绪后调用。
+ */
+void AX_BLE_StartService(void);
+
+/**
  * @brief  向已连接的手机发送数据 (通过 NUS TX Notify)
  * @param  data  数据指针
  * @param  len   数据长度
- * @return 发送成功返回 0，未连接返回 -1
+ * @retval  0   发送成功
+ * @retval -1   未连接或 Notify 未启用
+ * @retval -2   内存分配失败 (mbuf)
+ * @retval -3   底层 NimBLE 发送错误
  */
 int AX_BLE_Send(const uint8_t *data, uint16_t len);
 

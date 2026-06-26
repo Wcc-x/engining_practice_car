@@ -17,16 +17,16 @@ extern "C" {
 #define PCNT_ENCODER_1_B_GPIO        GPIO_NUM_5
 
 /* ---------- 编码器2 A/B 相 GPIO ---------- */
-#define PCNT_ENCODER_2_A_GPIO        GPIO_NUM_6
-#define PCNT_ENCODER_2_B_GPIO        GPIO_NUM_7
+#define PCNT_ENCODER_2_A_GPIO        GPIO_NUM_32   /* 原 GPIO6=Flash 冲突，换至 GPIO32 */
+#define PCNT_ENCODER_2_B_GPIO        GPIO_NUM_33   /* 原 GPIO7=Flash 冲突，换至 GPIO33 */
 
-#define PCNT_ENCODER_3_A_GPIO        GPIO_NUM_8
-#define PCNT_ENCODER_3_B_GPIO        GPIO_NUM_9
+#define PCNT_ENCODER_3_A_GPIO        GPIO_NUM_34   /* 原 GPIO8=Flash 冲突，换至 GPIO34 (仅输入) */
+#define PCNT_ENCODER_3_B_GPIO        GPIO_NUM_35   /* 原 GPIO9=Flash 冲突，换至 GPIO35 (仅输入) */
 
 #define PCNT_ENCODER_4_A_GPIO        GPIO_NUM_14
 #define PCNT_ENCODER_4_B_GPIO        GPIO_NUM_15
 /* ---------- 编码器物理参数 ---------- */
-#define PCNT_ENCODER_PULSES_PER_REV  11      /* 电机每转单相霍尔脉冲数          */
+#define PCNT_ENCODER_PULSES_PER_REV  390     /* 电机每转单相霍尔脉冲数 (4×=1560, 与 MEC_WHEEL_RESOLUTION 一致) */
 #define PCNT_ENCODER_GLITCH_NS       1000    /* 毛刺滤波时间（纳秒）             */
 
 /* ---------- PCNT 累加器限幅（accum_count=true，驱动内部自动处理溢出） ---------- */

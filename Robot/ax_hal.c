@@ -10,7 +10,10 @@
 
 #include "ax_hal.h"
 #include "esp_timer.h"
+#include "esp_log.h"
 #include <stdlib.h>
+
+static const char *TAG = "AX_HAL";
 
 /* ─────────────── BSP 实例指针 ─────────────── */
 
@@ -52,23 +55,41 @@ static ledc_config_t *motor_pwm_init(ledc_timer_t tmr, ledc_channel_t ch, int gp
  *  pwm = 0   停止: IN1=0, IN2=0
  * ─────────────────────────────────────────────────────────── */
 
+/* ── motor_set_speed 诊断计数器 ── */
+static int motor_dbg_cnt = 0;
+
 static void motor_set_speed(ledc_config_t *cfg,
                             gpio_num_t in1, gpio_num_t in2, int16_t pwm)
 {
+    /* ★ 先记录 GPIO 电平 (在任何 set 之前) */
+    int will_print = (motor_dbg_cnt < 4 && pwm != 0);
+    int ib = 0, jb = 0;
+    if (will_print) { ib = gpio_get_level(in1); jb = gpio_get_level(in2); }
+    motor_dbg_cnt++;
+    if (motor_dbg_cnt >= 200) motor_dbg_cnt = 0;
+
+    int16_t pwm_abs = pwm;
     if (pwm > 0) {
         gpio_set_level(in1, 1);
         gpio_set_level(in2, 0);
     } else if (pwm < 0) {
         gpio_set_level(in1, 0);
         gpio_set_level(in2, 1);
-        pwm = -pwm;
+        pwm_abs = (int16_t)(-pwm);
     } else {
         gpio_set_level(in1, 0);
         gpio_set_level(in2, 0);
     }
 
-    uint16_t duty = (uint16_t)((uint32_t)pwm * 100 / AX_MOTOR_PWM_MAX);
+    uint16_t duty = (uint16_t)((uint32_t)pwm_abs * 100 / AX_MOTOR_PWM_MAX);
     if (duty > 100) duty = 100;
+
+    if (will_print) {
+        printf("[HAL] motor GPIO%02d/GPIO%02d: pwm=%d duty=%d%% IN(前=%d,%d → 后=%d,%d)\n",
+               in1, in2, pwm, duty,
+               ib, jb, gpio_get_level(in1), gpio_get_level(in2));
+    }
+
     ledc_pwm_set_duty(cfg, duty);       /* ← BSP 库函数 */
 }
 
@@ -135,6 +156,7 @@ static void servo_set_angle(ledc_config_t *cfg, int16_t raw)
 void AX_HAL_Init(void)
 {
     /* ── IN1/IN2 GPIO 初始化 ── */
+    ESP_LOGI(TAG, "Step 1/5: GPIO config...");
     uint64_t mask = (1ULL << AX_MOTOR_A_IN1_GPIO) | (1ULL << AX_MOTOR_A_IN2_GPIO) |
                     (1ULL << AX_MOTOR_B_IN1_GPIO) | (1ULL << AX_MOTOR_B_IN2_GPIO) |
                     (1ULL << AX_MOTOR_C_IN1_GPIO) | (1ULL << AX_MOTOR_C_IN2_GPIO) |
@@ -154,22 +176,65 @@ void AX_HAL_Init(void)
     gpio_set_level(AX_MOTOR_C_IN1_GPIO, 0); gpio_set_level(AX_MOTOR_C_IN2_GPIO, 0);
     gpio_set_level(AX_MOTOR_D_IN1_GPIO, 0); gpio_set_level(AX_MOTOR_D_IN2_GPIO, 0);
 
+    /* ★ GPIO 自检: 逐个引脚 set → read 验证 */
+    {
+        gpio_num_t test_pins[] = {
+            AX_MOTOR_A_IN1_GPIO, AX_MOTOR_A_IN2_GPIO,
+            AX_MOTOR_B_IN1_GPIO, AX_MOTOR_B_IN2_GPIO,
+            AX_MOTOR_C_IN1_GPIO, AX_MOTOR_C_IN2_GPIO,
+            AX_MOTOR_D_IN1_GPIO, AX_MOTOR_D_IN2_GPIO,
+        };
+        const char *labels[] = {"A_IN1","A_IN2","B_IN1","B_IN2",
+                                "C_IN1","C_IN2","D_IN1","D_IN2"};
+        printf("[HAL] GPIO selftest START\n");
+        int fail_cnt = 0;
+        for (int i = 0; i < 8; i++) {
+            gpio_num_t p = test_pins[i];
+            int r0 = gpio_get_level(p);                       /* 读初始值 */
+            gpio_set_level(p, 1);
+            int r1 = gpio_get_level(p);                       /* 读 HIGH */
+            gpio_set_level(p, 0);
+            int r2 = gpio_get_level(p);                       /* 读 LOW (恢复) */
+            printf("[HAL] GPIO%-3d (%s): init=%d setH→%d setL→%d  %s\n",
+                   p, labels[i], r0, r1, r2,
+                   (r1 == 1 && r2 == 0) ? "OK" : "★ FAIL ★");
+            if (r1 != 1 || r2 != 0) fail_cnt++;
+        }
+        printf("[HAL] GPIO selftest END: %d/8 passed, %d FAILED\n", 8 - fail_cnt, fail_cnt);
+    }
+    ESP_LOGI(TAG, "Step 1/5: GPIO done");
+
     /* ── 电机 PWM (使用 BSP ledc.h 定义的 channel 宏) ── */
+    ESP_LOGI(TAG, "Step 2/5: Motor PWM init...");
     ax_motor_a_cfg = motor_pwm_init(LEDC_PWM_TIMER,  LEDC_PWM_CHANNEL,   LEDC_PWM_CHO_GPIO);
+    ESP_LOGI(TAG, "  Motor A OK (GPIO%d)", LEDC_PWM_CHO_GPIO);
     ax_motor_b_cfg = motor_pwm_init(LEDC_PWM_TIMER,  LEDC_PWM_CHANNEL_2, LEDC_PWM_CHO_GPIO_2);
+    ESP_LOGI(TAG, "  Motor B OK (GPIO%d)", LEDC_PWM_CHO_GPIO_2);
     ax_motor_c_cfg = motor_pwm_init(LEDC_PWM_TIMER_1,LEDC_PWM_CHANNEL_3, LEDC_PWM_CHO_GPIO_3);
+    ESP_LOGI(TAG, "  Motor C OK (GPIO%d)", LEDC_PWM_CHO_GPIO_3);
     ax_motor_d_cfg = motor_pwm_init(LEDC_PWM_TIMER_1,LEDC_PWM_CHANNEL_4, LEDC_PWM_CHO_GPIO_4);
+    ESP_LOGI(TAG, "  Motor D OK (GPIO%d)", LEDC_PWM_CHO_GPIO_4);
+    ESP_LOGI(TAG, "Step 2/5: Motor PWM done");
 
     /* ── 编码器 (使用 BSP pcnt_encoder.h 定义的引脚宏) ── */
+    ESP_LOGI(TAG, "Step 3/5: Encoder init...");
     ax_encoder_a_cfg = enc_init(PCNT_ENCODER_1_A_GPIO, PCNT_ENCODER_1_B_GPIO);
+    ESP_LOGI(TAG, "  Enc A OK");
     ax_encoder_b_cfg = enc_init(PCNT_ENCODER_2_A_GPIO, PCNT_ENCODER_2_B_GPIO);
+    ESP_LOGI(TAG, "  Enc B OK");
     ax_encoder_c_cfg = enc_init(AX_ENCODER_C_A_GPIO,   AX_ENCODER_C_B_GPIO);
+    ESP_LOGI(TAG, "  Enc C OK");
     ax_encoder_d_cfg = enc_init(AX_ENCODER_D_A_GPIO,   AX_ENCODER_D_B_GPIO);
+    ESP_LOGI(TAG, "  Enc D OK");
+    ESP_LOGI(TAG, "Step 3/5: Encoder done");
 
     /* ── 舵机 (使用 BSP ledc_Init) ── */
+    ESP_LOGI(TAG, "Step 4/5: Servo init...");
     servo_init();
+    ESP_LOGI(TAG, "Step 4/5: Servo done");
     AX_SERVO_S1_SetAngle(900);
     AX_SERVO_S2_SetAngle(900);
+    ESP_LOGI(TAG, "Step 5/5: HAL Init complete!");
 }
 
 /* ═══════════════════ 编码器接口 ═══════════════════ */

@@ -16,28 +16,28 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "ax_hal.h"
-#include "ax_hal.h"
 //电机PID闭环速度控制函数
-
-extern PID_Typedef A_PID;
-extern PID_Typedef B_PID;
-extern PID_Typedef C_PID;
-extern PID_Typedef D_PID;
 
 typedef struct{
 float Kp;
 float Ki;
 float Kd;
 float pwm_out_max;
+float I_OutMax;
 float Kp_out;
 float Ki_out;
 float Kd_out;
-float I_OutMax;
  float bias;
 float bias_last;
 } PID_Typedef;
 
-uint16_t PID_Handle(PID_Typedef *pid,float spd_target,float std_current);
+extern PID_Typedef A_PID;
+extern PID_Typedef B_PID;
+extern PID_Typedef C_PID;
+extern PID_Typedef D_PID;
+
+float PID_Handle(PID_Typedef *pid,float spd_target,float std_current);
+void  PID_ResetIntegral(PID_Typedef *pid);
 
 
 /* 结构体 */
