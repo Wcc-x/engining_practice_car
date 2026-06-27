@@ -12,6 +12,7 @@
 #include "esp_timer.h"
 #include "esp_log.h"
 #include <stdlib.h>
+#include "driver/ledc.h"   /* ledc_set_duty / ledc_update_duty — 直接写 raw ticks */
 
 static const char *TAG = "AX_HAL";
 
@@ -143,10 +144,20 @@ static void servo_set_angle(ledc_config_t *cfg, int16_t raw)
     if (deg < 0.0f)   deg = 0.0f;
     if (deg > 180.0f) deg = 180.0f;
 
-    /* 脉宽 → 占空比百分比 (50Hz 周期 = 20000us) */
-    float    us   = AX_SERVO_MIN_US + (deg / 180.0f) * (AX_SERVO_MAX_US - AX_SERVO_MIN_US);
-    uint16_t duty = (uint16_t)(us * 100.0f / 20000.0f + 0.5f);
-    ledc_pwm_set_duty(cfg, duty);       /* ← BSP 库函数 */
+    /*
+     * 脉宽 → LEDC 硬件计数值 (14-bit 分辨率, 周期 = 2^14 = 16384 ticks)
+     *
+     * 50Hz → 1 tick = 20000μs / 16384 ≈ 1.22μs
+     * 不走 BSP ledc_pwm_set_duty(百分比) 是因为百分比只有 ~100 档,
+     * 对舵机 500~2500μs 范围 (仅占周期 10%) 分辨率不到 10 档, 误差 ±100μs。
+     * 直接写 raw ticks 可获得满 14-bit 分辨率 (~0.1° 精度)。
+     */
+    float    us    = AX_SERVO_MIN_US + (deg / 180.0f) * (AX_SERVO_MAX_US - AX_SERVO_MIN_US);
+    uint32_t ticks = (uint32_t)(us * 16384.0f / 20000.0f + 0.5f);
+    if (ticks > 16384) ticks = 16384;
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, cfg->channel, ticks);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, cfg->channel);
 }
 
 /* ═══════════════════════════════════════════════════════════

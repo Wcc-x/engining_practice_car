@@ -149,7 +149,7 @@ void AX_ROBOT_Kinematics(void)
                R_Vel.RT_IX, R_Vel.RT_IY, R_Vel.RT_IW);
     }
 
-    /* 整型 → 浮点 (m/s, rad/s) */
+    /* 整型 → 浮点 (m/s, rad/s) 承接tx*/
     float tx = R_Vel.TG_IX / 1000.0f;
     float ty = R_Vel.TG_IY / 1000.0f;
     float tw = R_Vel.TG_IW / 1000.0f;

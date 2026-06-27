@@ -1,0 +1,15 @@
+# 烧录波特率 - 115200 最稳定
+CONFIG_ESPTOOLPY_BAUD=115200
+
+# Flash SPI 模式 - 大多数板子支持 DIO
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+
+# Flash 频率降到 20MHz - 解决 "Failed to communicate with the flash chip"
+CONFIG_ESPTOOLPY_FLASHFREQ_20M=y
+
+# 烧录前后不自动复位 - 避免 RTS 引脚导致 "Serial data stream stopped"
+CONFIG_ESPTOOLPY_BEFORE_NORESET=y
+CONFIG_ESPTOOLPY_AFTER_NORESET=y
+
+# 不使用 stub flasher - 直接用 ROM bootloader，兼容性更好
+CONFIG_ESPTOOLPY_NO_STUB=y

@@ -14,29 +14,29 @@
 创建一些PID实例，用于计算
 */
 PID_Typedef A_PID={
-	.Kp = 800,
-	.Ki = 1000,
+	.Kp = 600,
+	.Ki = 600,
 	.Kd = 1,
 	.pwm_out_max = 4200,
 	.I_OutMax = 1000,
 };
 PID_Typedef B_PID={
-	.Kp = 800,
-	.Ki = 1000,
+	.Kp = 600,
+	.Ki = 600,
 	.Kd = 1,
 	.pwm_out_max = 4200,
 	.I_OutMax = 1000,
 };
 PID_Typedef C_PID={
-	.Kp = 800,
-	.Ki = 1000,
+	.Kp = 600,
+	.Ki = 600,
 	.Kd = 1,
 	.pwm_out_max = 4200,
 	.I_OutMax = 1000,
 };
 PID_Typedef D_PID={
-	.Kp = 800,
-	.Ki = 1000,
+	.Kp = 600,
+	.Ki = 600,
 	.Kd = 1,
 	.pwm_out_max = 4200,
 	.I_OutMax = 1000,

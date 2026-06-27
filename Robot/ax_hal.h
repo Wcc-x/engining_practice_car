@@ -37,7 +37,7 @@ extern "C" {
 
 /* ─────────────── 电机 IN1/IN2 引脚 (H桥方向控制) ─────────────── */
 
-#define AX_MOTOR_A_IN1_GPIO     GPIO_NUM_0
+#define AX_MOTOR_A_IN1_GPIO     GPIO_NUM_1
 #define AX_MOTOR_A_IN2_GPIO     GPIO_NUM_18
 #define AX_MOTOR_B_IN1_GPIO     GPIO_NUM_25   /* 原 GPIO3=UART0_RX 冲突，换至 GPIO25 */
 #define AX_MOTOR_B_IN2_GPIO     GPIO_NUM_19
