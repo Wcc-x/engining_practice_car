@@ -81,7 +81,7 @@ static void motor_set_speed(ledc_config_t *cfg,
         gpio_set_level(in1, 0);
         gpio_set_level(in2, 0);
     }
-
+    //映射
     uint16_t duty = (uint16_t)((uint32_t)pwm_abs * 100 / AX_MOTOR_PWM_MAX);
     if (duty > 100) duty = 100;
 

@@ -60,6 +60,7 @@ typedef struct {
 #define  MEC_WHEEL_DIAMETER  0.080      /* 轮径 (m) */
 #define  MEC_WHEEL_RESOLUTION  1560.0   /* 编码器 ppr */
 #define  MEC_WHEEL_SCALE     (PI * MEC_WHEEL_DIAMETER * PID_RATE / MEC_WHEEL_RESOLUTION)
+//PID_RATE表示一次pid的输出时间，从而得到周期计算数据
 
 /* 速度限制 (×1000) */
 #define R_VX_LIMIT  1500

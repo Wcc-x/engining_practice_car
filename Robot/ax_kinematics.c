@@ -93,6 +93,9 @@ void AX_ROBOT_Kinematics(void)
      *  Vy = (-Va + Vb + Vc - Vd) / 4          ← 横移速度 (m/s)
      *  Vω = (-Va + Vb - Vc + Vd) / 4 / R      ← 旋转角速度 (rad/s)
      *    */
+
+
+    /*---------------------------------------------------------------------从这*/
     double va = R_Wheel_A.RT;
     double vb = R_Wheel_B.RT;
     double vc = R_Wheel_C.RT;
@@ -107,6 +110,9 @@ void AX_ROBOT_Kinematics(void)
     R_Vel.RT_IX = (short)(r_fx * 1000.0);
     R_Vel.RT_IY = (short)(r_fy * 1000.0);
     R_Vel.RT_IW = (short)(r_fw * 1000.0);
+/*---------------------------------------都是打印出来的垃圾，没必要管*/
+
+
 
     /*   
      *  Step 3 — 目标速度限幅 & 运动使能检查
@@ -214,14 +220,14 @@ void AX_ROBOT_Kinematics(void)
     if (kin_dbg_cnt % 50 == 1 &&
         (R_Wheel_A.PWM || R_Wheel_B.PWM || R_Wheel_C.PWM || R_Wheel_D.PWM)) {
         printf("[KIN] Step6 MOTOR: A=%.1f B=%.1f C=%.1f D=%.1f (PWM raw)\n",
-               (double)(-R_Wheel_A.PWM), (double)(-R_Wheel_B.PWM),
-               (double)R_Wheel_C.PWM, (double)R_Wheel_D.PWM);
+               (double)R_Wheel_A.PWM, (double)(-R_Wheel_B.PWM),
+               (double)R_Wheel_C.PWM, (double)(-R_Wheel_D.PWM));
     }
 
-    AX_MOTOR_A_SetSpeed(-R_Wheel_A.PWM);
-    AX_MOTOR_B_SetSpeed(-R_Wheel_B.PWM);
+    AX_MOTOR_A_SetSpeed( -R_Wheel_A.PWM);
+    AX_MOTOR_B_SetSpeed( R_Wheel_B.PWM);
     AX_MOTOR_C_SetSpeed( R_Wheel_C.PWM);
-    AX_MOTOR_D_SetSpeed( R_Wheel_D.PWM);
+    AX_MOTOR_D_SetSpeed(-R_Wheel_D.PWM);
 }
 
 
