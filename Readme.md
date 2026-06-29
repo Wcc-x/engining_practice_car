@@ -20,7 +20,7 @@
 ## 注意：有的ESP32特点是芯片自动复位，所以我的sdkconfig.defaults强行锁死芯片复位，降低flash SPI频率，波特率从408000改为115200（防止总线不稳定）【感谢deepseek】
 ## 在调试的时候要习惯串口打印，esp32自带uart转虚拟USB，但是不能占用tx rx引脚，打印串口能精确定义问题，在不同的函数后面加上打印，能够判断程序卡死在哪一步，加上build的日志，能够掌握报错信息，从而排查
 
-# 讲一下数据流：蓝牙触发回调->拿到目标Vx,Vy->通过绑定示例的函数给到RI->解算到真实的Va...->数据流给到TI->PID计算->给到pwm->触发PWM的ax_hal速度解算->结合驱动板给到duty，输出PWM，同时pcnt一直在读取编码器计数
+# 讲一下数据流：蓝牙触发回调->拿到目标Vx,Vy->通过绑定示例的函数给到RI->解算到真实的Va...->数据流给到TI->PID计算->给到pwm->触发PWM的ax_hal速度解算motor_setspeed(内部给到duty)->结合驱动板给到duty，输出PWM A_motor_set_speed，同时pcnt一直在读取编码器计数
 # define  MEC_WHEEL_SCALE     (PI * MEC_WHEEL_DIAMETER * PID_RATE / MEC_WHEEL_RESOLUTION)
 ## *   
  *  初始化 — 双通道 4x 正交解码
